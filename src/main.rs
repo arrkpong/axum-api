@@ -26,10 +26,11 @@ async fn admin() -> &'static str {
 async fn main() {
     let app = Router::new()
         .route("/", get(index))
-        .route("api/v1/login", post(login))
-        .route("api/v1/register", post(register))
-        .route("api/v1/logout", post(logout))
-        .route("api/v1/admin", get(admin));
+        .route("/api/v1/login", post(login))
+        .route("/api/v1/register", post(register))
+        .route("/api/v1/logout", post(logout))
+        .route("/api/v1/admin", get(admin));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    println!("Server running on http://127.0.0.1:3000");
     axum::serve(listener, app).await.unwrap();
 }
