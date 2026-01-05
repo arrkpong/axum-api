@@ -1,0 +1,9 @@
+# Compiled source
+/target/
+
+# IDE files
+.idea/
+.vscode/
+
+# Environment variables
+.env
