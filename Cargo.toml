@@ -4,5 +4,36 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = { version = "0.8.8" }
+# Web framework
+axum = { version = "0.8.8", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
+tower = { version = "0.5.2" }
+tower-http = { version = "0.6.8", features = ["cors", "trace", "timeout"] }
+utoipa = { version = "5.3.1", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.0", features = ["axum"] }
+
+# Serialization
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.148" }
+
+# Database
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "macros"] }
+
+# Authentication & Security
+argon2 = { version = "0.5.3" }
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+
+# Validation
+validator = { version = "0.20.0", features = ["derive"] }
+
+# Time
+chrono = { version = "0.4.42", features = ["serde"] }
+
+# Utilities
+uuid = { version = "1.19.0", features = ["v4", "serde"] }
+dotenvy = { version = "0.15.7" }
+thiserror = { version = "2.0.17" }
+
+# Logging
+tracing = { version = "0.1.44" }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }

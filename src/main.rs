@@ -1,7 +1,8 @@
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
+use dotenvy::dotenv;
 
 async fn index() -> &'static str {
     "Hello, World!"
@@ -24,13 +25,19 @@ async fn admin() -> &'static str {
 
 #[tokio::main]
 async fn main() {
+    dotenv().ok();
+    let _db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let app = Router::new()
         .route("/", get(index))
         .route("/api/v1/login", post(login))
         .route("/api/v1/register", post(register))
         .route("/api/v1/logout", post(logout))
         .route("/api/v1/admin", get(admin));
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Server running on http://127.0.0.1:3000");
+
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let addr = format!("{}:{}", host, port);
+    println!("🚀 Server is starting on http://{}", addr);
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
