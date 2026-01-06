@@ -37,7 +37,7 @@ async fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("{}:{}", host, port);
-    println!("🚀 Server is starting on 0.0.0.0:{}", port);
+    println!("🚀 Server is starting on {}", addr);
     println!("👉 Open in browser: http://localhost:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
