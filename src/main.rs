@@ -40,6 +40,14 @@ struct LoginPayload {
 struct RegisterPayload {
     username: String,
     password: String,
+    email: Option<String>,
+    phone: Option<String>,
+}
+
+/// Payload for token refresh requests
+#[derive(Deserialize)]
+struct RefreshPayload {
+    refresh_token: String,
 }
 
 // ============================================================================
@@ -49,12 +57,14 @@ struct RegisterPayload {
 /// JWT token claims structure
 /// - `sub`: Subject (username)
 /// - `user_id`: Database user ID
+/// - `jti`: JWT ID (unique token identifier for blacklisting)
 /// - `iat`: Issued at timestamp
 /// - `exp`: Expiration timestamp
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     sub: String,
     user_id: i32,
+    jti: String,
     exp: usize,
     iat: usize,
 }
@@ -64,6 +74,8 @@ struct Claims {
 struct AuthUser {
     username: String,
     user_id: i32,
+    jti: String,
+    exp: chrono::DateTime<Utc>,
 }
 
 // ============================================================================
@@ -130,34 +142,61 @@ async fn login(
                 .verify_password(payload.password.as_bytes(), &parsed_hash)
                 .is_ok()
             {
-                // Generate JWT token with 24-hour expiration
+                // Generate access token (15 minutes)
                 let now = Utc::now();
-                let exp = now + Duration::hours(24);
+                let access_exp = now + Duration::minutes(15);
                 let claims = Claims {
                     sub: user.username.clone(),
                     user_id: user.id,
+                    jti: uuid::Uuid::new_v4().to_string(),
                     iat: now.timestamp() as usize,
-                    exp: exp.timestamp() as usize,
+                    exp: access_exp.timestamp() as usize,
                 };
-                let token = match encode(
+                let access_token = match encode(
                     &Header::default(),
                     &claims,
                     &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
                 ) {
                     Ok(t) => t,
                     Err(e) => {
-                        error!(%e, "Failed to create token");
+                        error!(%e, "Failed to create access token");
                         return (StatusCode::INTERNAL_SERVER_ERROR, "Token creation failed")
                             .into_response();
                     }
                 };
+
+                // Generate refresh token (7 days)
+                let refresh_token = uuid::Uuid::new_v4().to_string();
+                let refresh_exp = now + Duration::days(7);
+
+                // Store refresh token in DB
+                let store_result = sqlx::query(
+                    "INSERT INTO auth_refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)"
+                )
+                .bind(user.id)
+                .bind(&refresh_token)
+                .bind(refresh_exp)
+                .execute(&state.db_pool)
+                .await;
+
+                if let Err(e) = store_result {
+                    error!(%e, "Failed to store refresh token");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"status": "error", "message": "Login failed"})),
+                    )
+                        .into_response();
+                }
+
                 info!(user_id = user.id, "Login successful");
                 (
                     StatusCode::OK,
                     Json(serde_json::json!({
                         "status": "success",
                         "message": "Login successful",
-                        "token": token,
+                        "access_token": access_token,
+                        "refresh_token": refresh_token,
+                        "expires_in": 900,
                         "user_id": user.id
                     })),
                 )
@@ -219,11 +258,13 @@ async fn register(
     };
 
     // Insert new user into database
-    let insert_user = sqlx::query!(
-        "INSERT INTO auth_users (username, password) VALUES ($1, $2)",
-        payload.username,
-        password_hash,
+    let insert_user = sqlx::query(
+        "INSERT INTO auth_users (username, email, phone, password) VALUES ($1, $2, $3, $4)",
     )
+    .bind(&payload.username)
+    .bind(&payload.email)
+    .bind(&payload.phone)
+    .bind(&password_hash)
     .execute(&state.db_pool)
     .await;
 
@@ -265,13 +306,42 @@ async fn register(
     }
 }
 
-/// Logout handler (stateless - just returns success)
-async fn logout() -> impl IntoResponse {
-    info!("Logout endpoint hit");
+/// Logout handler - adds token to blacklist and removes refresh tokens
+/// Requires valid JWT token to identify which token to revoke
+async fn logout(State(state): State<AppState>, auth_user: AuthUser) -> impl IntoResponse {
+    info!("Logout endpoint hit for user: {}", auth_user.username);
+
+    // Insert access token JTI into blacklist
+    let blacklist_result = sqlx::query(
+        "INSERT INTO auth_token_blacklist (token_jti, user_id, expires_at) VALUES ($1, $2, $3) ON CONFLICT (token_jti) DO NOTHING"
+    )
+    .bind(&auth_user.jti)
+    .bind(auth_user.user_id)
+    .bind(auth_user.exp)
+    .execute(&state.db_pool)
+    .await;
+
+    // Delete all refresh tokens for this user
+    let delete_result = sqlx::query("DELETE FROM auth_refresh_tokens WHERE user_id = $1")
+        .bind(auth_user.user_id)
+        .execute(&state.db_pool)
+        .await;
+
+    if blacklist_result.is_err() || delete_result.is_err() {
+        error!("Failed to complete logout");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"status": "error", "message": "Logout failed"})),
+        )
+            .into_response();
+    }
+
+    info!("Logout successful - tokens revoked");
     Json(serde_json::json!({
         "status": "success",
         "message": "Logout successful",
     }))
+    .into_response()
 }
 
 /// Protected admin endpoint
@@ -283,6 +353,110 @@ async fn admin(auth_user: AuthUser) -> impl IntoResponse {
         "message": format!("Welcome back, {}!", auth_user.username),
         "user_id": auth_user.user_id
     }))
+}
+
+/// Refresh token handler - exchange refresh token for new access token
+async fn refresh(
+    State(state): State<AppState>,
+    Json(payload): Json<RefreshPayload>,
+) -> impl IntoResponse {
+    info!("Refresh token endpoint hit");
+
+    // Find refresh token in DB
+    let token_record =
+        sqlx::query("SELECT user_id, expires_at FROM auth_refresh_tokens WHERE token = $1")
+            .bind(&payload.refresh_token)
+            .fetch_optional(&state.db_pool)
+            .await;
+
+    let row = match token_record {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            warn!("Refresh token not found");
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"status": "error", "message": "Invalid refresh token"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            error!(%e, "Database error during refresh");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Refresh failed"})),
+            )
+                .into_response();
+        }
+    };
+
+    use sqlx::Row;
+    let user_id: i32 = row.get("user_id");
+    let expires_at: chrono::DateTime<Utc> = row.get("expires_at");
+
+    // Check if refresh token is expired
+    if expires_at < Utc::now() {
+        // Delete expired token
+        let _ = sqlx::query("DELETE FROM auth_refresh_tokens WHERE token = $1")
+            .bind(&payload.refresh_token)
+            .execute(&state.db_pool)
+            .await;
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"status": "error", "message": "Refresh token expired"})),
+        )
+            .into_response();
+    }
+
+    // Get username for claims
+    let user_record = sqlx::query("SELECT username FROM auth_users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(&state.db_pool)
+        .await;
+
+    let username: String = match user_record {
+        Ok(Some(row)) => row.get("username"),
+        _ => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "User not found"})),
+            )
+                .into_response();
+        }
+    };
+
+    // Generate new access token
+    let now = Utc::now();
+    let access_exp = now + Duration::minutes(15);
+    let claims = Claims {
+        sub: username,
+        user_id,
+        jti: uuid::Uuid::new_v4().to_string(),
+        iat: now.timestamp() as usize,
+        exp: access_exp.timestamp() as usize,
+    };
+
+    let access_token = match encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
+    ) {
+        Ok(t) => t,
+        Err(e) => {
+            error!(%e, "Failed to create access token");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Token creation failed").into_response();
+        }
+    };
+
+    info!(user_id = user_id, "Token refreshed successfully");
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "success",
+            "access_token": access_token,
+            "expires_in": 900
+        })),
+    )
+        .into_response()
 }
 
 // ============================================================================
@@ -332,12 +506,36 @@ impl FromRequestParts<AppState> for AuthUser {
             &Validation::default(),
         );
 
-        // Step 4: Return authenticated user or error
+        // Step 4: Check if token is blacklisted
         match token_data {
-            Ok(data) => Ok(AuthUser {
-                username: data.claims.sub,
-                user_id: data.claims.user_id,
-            }),
+            Ok(data) => {
+                // Check blacklist (using runtime query since table may not exist at compile time)
+                let blacklist_check =
+                    sqlx::query("SELECT 1 FROM auth_token_blacklist WHERE token_jti = $1")
+                        .bind(&data.claims.jti)
+                        .fetch_optional(&state.db_pool)
+                        .await;
+
+                if blacklist_check.unwrap_or(None).is_some() {
+                    return Err((
+                        StatusCode::UNAUTHORIZED,
+                        Json(
+                            serde_json::json!({"status": "error", "message": "Token has been revoked"}),
+                        ),
+                    ));
+                }
+
+                // Convert exp timestamp to DateTime
+                let exp_dt = chrono::DateTime::from_timestamp(data.claims.exp as i64, 0)
+                    .unwrap_or_else(Utc::now);
+
+                Ok(AuthUser {
+                    username: data.claims.sub,
+                    user_id: data.claims.user_id,
+                    jti: data.claims.jti,
+                    exp: exp_dt,
+                })
+            }
             Err(_) => Err((
                 StatusCode::UNAUTHORIZED,
                 Json(serde_json::json!({"status": "error", "message": "Invalid or expired token"})),
@@ -389,6 +587,7 @@ async fn main() {
         .route("/api/v1/login", post(login))
         .route("/api/v1/register", post(register))
         .route("/api/v1/logout", post(logout))
+        .route("/api/v1/refresh", post(refresh))
         .route("/api/v1/admin", get(admin))
         .with_state(app_state)
         .layer(TraceLayer::new_for_http());
