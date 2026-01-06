@@ -91,6 +91,109 @@ struct AppState {
 }
 
 // ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/// Generate a new access token for the given user
+/// Returns (access_token, claims) or error response
+fn generate_access_token(
+    username: &str,
+    user_id: i32,
+    jwt_secret: &str,
+) -> Result<(String, Claims), (StatusCode, String)> {
+    let now = Utc::now();
+    let access_exp = now + Duration::minutes(15);
+    let claims = Claims {
+        sub: username.to_string(),
+        user_id,
+        jti: uuid::Uuid::new_v4().to_string(),
+        iat: now.timestamp() as usize,
+        exp: access_exp.timestamp() as usize,
+    };
+
+    match encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(jwt_secret.as_bytes()),
+    ) {
+        Ok(token) => Ok((token, claims)),
+        Err(e) => {
+            error!(%e, "Failed to create access token");
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Token creation failed".to_string(),
+            ))
+        }
+    }
+}
+
+/// Hash a password using Argon2
+fn hash_password(password: &str) -> Result<String, (StatusCode, String)> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    match argon2.hash_password(password.as_bytes(), &salt) {
+        Ok(hash) => Ok(hash.to_string()),
+        Err(e) => {
+            error!(%e, "Password hashing failed");
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to hash password".to_string(),
+            ))
+        }
+    }
+}
+
+/// Verify a password against a stored hash
+fn verify_password(password: &str, password_hash: &str) -> Result<bool, (StatusCode, String)> {
+    let parsed_hash = match PasswordHash::new(password_hash) {
+        Ok(hash) => hash,
+        Err(e) => {
+            error!(%e, "Failed to parse stored password hash");
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to verify password".to_string(),
+            ));
+        }
+    };
+
+    let argon2 = Argon2::default();
+    Ok(argon2
+        .verify_password(password.as_bytes(), &parsed_hash)
+        .is_ok())
+}
+
+/// Generate and store a new refresh token
+async fn create_refresh_token(
+    user_id: i32,
+    db_pool: &PgPool,
+) -> Result<String, (StatusCode, String)> {
+    let now = Utc::now();
+    let refresh_token = uuid::Uuid::new_v4().to_string();
+    let refresh_exp = now + Duration::days(7);
+
+    // Store refresh token in DB
+    let store_result = sqlx::query(
+        "INSERT INTO auth_refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)",
+    )
+    .bind(user_id)
+    .bind(&refresh_token)
+    .bind(refresh_exp)
+    .execute(db_pool)
+    .await;
+
+    match store_result {
+        Ok(_) => Ok(refresh_token),
+        Err(e) => {
+            error!(%e, "Failed to store refresh token");
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Login failed".to_string(),
+            ))
+        }
+    }
+}
+
+// ============================================================================
 // ROUTE HANDLERS
 // ============================================================================
 
@@ -124,69 +227,37 @@ async fn login(
 
     match select_user {
         Ok(Some(user)) => {
-            // Parse the stored password hash
-            let parsed_hash = match PasswordHash::new(&user.password) {
-                Ok(hash) => hash,
-                Err(e) => {
-                    error!(%e, "Failed to parse stored password hash");
+            // Verify password using helper
+            if match verify_password(&payload.password, &user.password) {
+                Ok(valid) => valid,
+                Err((status, msg)) => {
                     return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({"status": "error", "message": "Failed to verify password"})),
+                        status,
+                        Json(serde_json::json!({"status": "error", "message": msg})),
                     )
                         .into_response();
                 }
-            };
-            // Verify password using Argon2
-            let argon2 = Argon2::default();
-            if argon2
-                .verify_password(payload.password.as_bytes(), &parsed_hash)
-                .is_ok()
-            {
-                // Generate access token (15 minutes)
-                let now = Utc::now();
-                let access_exp = now + Duration::minutes(15);
-                let claims = Claims {
-                    sub: user.username.clone(),
-                    user_id: user.id,
-                    jti: uuid::Uuid::new_v4().to_string(),
-                    iat: now.timestamp() as usize,
-                    exp: access_exp.timestamp() as usize,
-                };
-                let access_token = match encode(
-                    &Header::default(),
-                    &claims,
-                    &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
-                ) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        error!(%e, "Failed to create access token");
-                        return (StatusCode::INTERNAL_SERVER_ERROR, "Token creation failed")
+            } {
+                // Generate access token using helper
+                let (access_token, _claims) =
+                    match generate_access_token(&user.username, user.id, &state.jwt_secret) {
+                        Ok(result) => result,
+                        Err((status, msg)) => {
+                            return (status, msg).into_response();
+                        }
+                    };
+
+                // Generate refresh token using helper
+                let refresh_token = match create_refresh_token(user.id, &state.db_pool).await {
+                    Ok(token) => token,
+                    Err((status, msg)) => {
+                        return (
+                            status,
+                            Json(serde_json::json!({"status": "error", "message": msg})),
+                        )
                             .into_response();
                     }
                 };
-
-                // Generate refresh token (7 days)
-                let refresh_token = uuid::Uuid::new_v4().to_string();
-                let refresh_exp = now + Duration::days(7);
-
-                // Store refresh token in DB
-                let store_result = sqlx::query(
-                    "INSERT INTO auth_refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)"
-                )
-                .bind(user.id)
-                .bind(&refresh_token)
-                .bind(refresh_exp)
-                .execute(&state.db_pool)
-                .await;
-
-                if let Err(e) = store_result {
-                    error!(%e, "Failed to store refresh token");
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({"status": "error", "message": "Login failed"})),
-                    )
-                        .into_response();
-                }
 
                 info!(user_id = user.id, "Login successful");
                 (
@@ -242,16 +313,13 @@ async fn register(
 ) -> impl IntoResponse {
     info!("Register endpoint hit");
 
-    // Generate random salt and hash password
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    let password_hash = match argon2.hash_password(payload.password.as_bytes(), &salt) {
-        Ok(hash) => hash.to_string(),
-        Err(e) => {
-            error!(%e, "Password hashing failed");
+    // Generate random salt and hash password using helper
+    let password_hash = match hash_password(&payload.password) {
+        Ok(hash) => hash,
+        Err((status, msg)) => {
             return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "message": "Failed to hash password"})),
+                status,
+                Json(serde_json::json!({"status": "error", "message": msg})),
             )
                 .into_response();
         }
@@ -424,26 +492,12 @@ async fn refresh(
         }
     };
 
-    // Generate new access token
-    let now = Utc::now();
-    let access_exp = now + Duration::minutes(15);
-    let claims = Claims {
-        sub: username,
-        user_id,
-        jti: uuid::Uuid::new_v4().to_string(),
-        iat: now.timestamp() as usize,
-        exp: access_exp.timestamp() as usize,
-    };
-
-    let access_token = match encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
-    ) {
-        Ok(t) => t,
-        Err(e) => {
-            error!(%e, "Failed to create access token");
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Token creation failed").into_response();
+    // Generate new access token using helper
+    let (access_token, _claims) = match generate_access_token(&username, user_id, &state.jwt_secret)
+    {
+        Ok(result) => result,
+        Err((status, msg)) => {
+            return (status, msg).into_response();
         }
     };
 
