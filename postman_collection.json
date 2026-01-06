@@ -116,7 +116,7 @@
       }
     },
     {
-      "name": "Admin (Protected)",
+      "name": "Profile (Protected)",
       "request": {
         "method": "GET",
         "header": [
@@ -126,11 +126,12 @@
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/api/v1/admin",
+          "raw": "{{baseUrl}}/api/v1/profile",
           "host": ["{{baseUrl}}"],
-          "path": ["api", "v1", "admin"]
+          "path": ["api", "v1", "profile"]
         }
-      }
+      },
+      "response": []
     },
     {
       "name": "Logout",

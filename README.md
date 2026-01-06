@@ -65,13 +65,13 @@ cargo build --release
 ## API Endpoints
 
 | Method | Endpoint           | Description                 | Auth Required |
-|--------|--------------------|-----------------------------|---------------|
+| ------ | ------------------ | --------------------------- | ------------- |
 | GET    | `/`                | Health check                | Public        |
 | POST   | `/api/v1/register` | Create new user             | Public        |
 | POST   | `/api/v1/login`    | Get access + refresh tokens | Public        |
 | POST   | `/api/v1/refresh`  | Renew access token          | Public        |
 | POST   | `/api/v1/logout`   | Revoke tokens               | 🔒 Token      |
-| GET    | `/api/v1/admin`    | Protected endpoint          | 🔒 Token      |
+| GET    | `/api/v1/profile`  | Protected endpoint          | 🔒 Token      |
 
 ## Usage Examples
 
@@ -94,7 +94,7 @@ curl -X POST http://localhost:8080/api/v1/login \
 ### Access Protected Route
 
 ```bash
-curl http://localhost:8080/api/v1/admin \
+curl http://localhost:8080/api/v1/profile \
   -H "Authorization: Bearer <access_token>"
 ```
 
@@ -108,4 +108,4 @@ curl -X POST http://localhost:8080/api/v1/refresh \
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

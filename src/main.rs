@@ -412,14 +412,17 @@ async fn logout(State(state): State<AppState>, auth_user: AuthUser) -> impl Into
     .into_response()
 }
 
-/// Protected admin endpoint
+/// Protected profile endpoint
 /// Requires valid JWT token (extracted via AuthUser)
-async fn admin(auth_user: AuthUser) -> impl IntoResponse {
-    info!("Admin endpoint accessed by: {}", auth_user.username);
+async fn profile(auth_user: AuthUser) -> impl IntoResponse {
+    info!("Profile endpoint accessed by: {}", auth_user.username);
     Json(serde_json::json!({
         "status": "success",
         "message": format!("Welcome back, {}!", auth_user.username),
-        "user_id": auth_user.user_id
+        "user_id": auth_user.user_id,
+        "username": auth_user.username,
+        "email": "TODO", // We will need to fetch this from DB if needed
+        "phone": "TODO"
     }))
 }
 
@@ -642,7 +645,7 @@ async fn main() {
         .route("/api/v1/register", post(register))
         .route("/api/v1/logout", post(logout))
         .route("/api/v1/refresh", post(refresh))
-        .route("/api/v1/admin", get(admin))
+        .route("/api/v1/profile", get(profile))
         .with_state(app_state)
         .layer(TraceLayer::new_for_http());
 
