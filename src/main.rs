@@ -14,10 +14,10 @@ use tower_http::trace::TraceLayer;
 use tracing::{Level, error, info, instrument, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-// use argon2::{
-//     Argon2,
-//     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
-// };
+use argon2::{
+    Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
+};
 
 #[derive(Deserialize)]
 struct LoginPayload {
@@ -52,7 +52,22 @@ async fn login(State(pool): State<PgPool>, Json(payload): Json<LoginPayload>) ->
 
     match select_user {
         Ok(Some(user)) => {
-            if user.password == payload.password {
+            let parsed_hash = match PasswordHash::new(&user.password) {
+                Ok(hash) => hash,
+                Err(e) => {
+                    error!(%e, "Failed to parse stored password hash");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"status": "error", "message": "Failed to verify password"})),
+                    )
+                        .into_response();
+                }
+            };
+            let argon2 = Argon2::default();
+            if argon2
+                .verify_password(payload.password.as_bytes(), &parsed_hash)
+                .is_ok()
+            {
                 info!(user_id = user.id, "Login successful");
                 (
                     StatusCode::OK,
@@ -100,10 +115,24 @@ async fn register(
 ) -> impl IntoResponse {
     info!("Register endpoint hit");
 
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let password_hash = match argon2.hash_password(payload.password.as_bytes(), &salt) {
+        Ok(hash) => hash.to_string(),
+        Err(e) => {
+            error!(%e, "Password hashing failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Failed to hash password"})),
+            )
+                .into_response();
+        }
+    };
+
     let insert_user = sqlx::query!(
         "INSERT INTO auth_users (username, password) VALUES ($1, $2)",
-        &payload.username,
-        &payload.password,
+        payload.username,
+        password_hash,
     )
     .execute(&pool)
     .await;
