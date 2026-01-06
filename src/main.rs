@@ -31,11 +31,11 @@ struct RegisterPayload {
     password: String,
 }
 
-async fn index(State(_db_pool): State<PgPool>) -> impl IntoResponse {
+async fn index() -> impl IntoResponse {
     info!("Index endpoint hit");
     Json(serde_json::json!({
         "status": "success",
-        "message": "Welcome to the API",
+        "message": "Welcome to the Index API",
     }))
 }
 
@@ -148,10 +148,18 @@ async fn register(
 
 async fn logout() -> impl IntoResponse {
     info!("Logout endpoint hit");
+    Json(serde_json::json!({
+        "status": "success",
+        "message": "Logout successful",
+    }))
 }
 
 async fn admin() -> impl IntoResponse {
     info!("Admin endpoint hit");
+    Json(serde_json::json!({
+        "status": "success",
+        "message": "Welcome to the admin panel",
+    }))
 }
 
 #[tokio::main]
