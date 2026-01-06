@@ -9,8 +9,8 @@ axum = { version = "0.8.8", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
 tower = { version = "0.5.2" }
 tower-http = { version = "0.6.8", features = ["cors", "trace", "timeout"] }
-utoipa = { version = "5.3.1", features = ["axum_extras", "uuid", "chrono"] }
-utoipa-swagger-ui = { version = "9.0.0", features = ["axum"] }
+utoipa = { version = "5.4.0", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
