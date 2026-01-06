@@ -16,6 +16,12 @@ use sqlx::postgres::PgPoolOptions;
 // };
 
 #[derive(Deserialize)]
+struct LoginPayload {
+    username: String,
+    password: String,
+}
+
+#[derive(Deserialize)]
 struct RegisterPayload {
     username: String,
     password: String,
@@ -28,27 +34,71 @@ async fn index(State(_db_pool): State<PgPool>) -> impl IntoResponse {
     }))
 }
 
-async fn login() -> &'static str {
-    "Login endpoint"
+async fn login(State(pool): State<PgPool>, Json(payload): Json<LoginPayload>) -> impl IntoResponse {
+    let select_user = sqlx::query!(
+        "SELECT id, username, password FROM auth_users WHERE username = $1",
+        &payload.username,
+    )
+    .fetch_optional(&pool)
+    .await;
+
+    match select_user {
+        Ok(Some(user)) => {
+            if user.password == payload.password {
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({
+                        "status": "success",
+                        "message": "Login successful",
+                        "user_id": user.id
+                    })),
+                )
+                    .into_response()
+            } else {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(serde_json::json!({"status": "error", "message": "Invalid credentials"})),
+                )
+                    .into_response()
+            }
+        }
+
+        Ok(None) => (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"status": "error", "message": "Invalid credentials"})),
+        )
+            .into_response(),
+
+        Err(e) => {
+            eprintln!("Database error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Failed to fetch user"})),
+            )
+                .into_response()
+        }
+    }
 }
 async fn register(
     State(pool): State<PgPool>,
     Json(payload): Json<RegisterPayload>,
 ) -> impl IntoResponse {
-    let result = sqlx::query!(
+    let insert_user = sqlx::query!(
         "INSERT INTO auth_users (username, password) VALUES ($1, $2)",
         &payload.username,
         &payload.password,
     )
     .execute(&pool)
     .await;
-    match result {
+
+    match insert_user {
         Ok(_) => (
             StatusCode::CREATED,
             Json(
                 serde_json::json!({"status": "success", "message": "User registered successfully"}),
             ),
-        ),
+        )
+            .into_response(),
         Err(e) => {
             if let Some(db_error) = e.as_database_error()
                 && db_error.is_unique_violation()
@@ -56,23 +106,20 @@ async fn register(
                 return match db_error.constraint() {
                     Some("auth_users_username_key") => (
                         StatusCode::CONFLICT,
-                        Json(
-                            serde_json::json!({"status": "error", "message": "Username already exists"}),
-                        ),
-                    ),
+                        Json(serde_json::json!({"status": "error", "message": "Username already exists"})),
+                    ).into_response(),
                     _ => (
                         StatusCode::CONFLICT,
-                        Json(
-                            serde_json::json!({"status": "error", "message": "Unique constraint violation"}),
-                        ),
-                    ),
+                        Json(serde_json::json!({"status": "error", "message": "Unique constraint violation"})),
+                    ).into_response(),
                 };
             }
-
+            eprintln!("Database error: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": "Failed to register user"})),
             )
+                .into_response()
         }
     }
 }
