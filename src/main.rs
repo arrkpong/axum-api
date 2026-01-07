@@ -16,7 +16,11 @@ use tower::ServiceBuilder;
 use tower::buffer::BufferLayer;
 use tower::limit::RateLimitLayer;
 use tower::timeout::TimeoutLayer;
-use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
+use tower_http::{
+    compression::CompressionLayer,
+    cors::{Any, CorsLayer},
+    trace::TraceLayer,
+};
 use tracing::{error, info, instrument, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -85,15 +89,74 @@ struct AuthUser {
 }
 
 // ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+/// Application configuration loaded from environment variables
+#[derive(Clone)]
+struct Config {
+    /// JWT secret key for signing tokens
+    jwt_secret: String,
+    /// Access token expiry in minutes
+    access_token_expiry_minutes: i64,
+    /// Refresh token expiry in days
+    refresh_token_expiry_days: i64,
+    /// CORS allowed origin ("*" for permissive)
+    cors_origin: String,
+    /// Rate limit: requests per window
+    rate_limit_requests: u64,
+    /// Rate limit: window in seconds
+    rate_limit_seconds: u64,
+    /// Request timeout in seconds
+    request_timeout_seconds: u64,
+    /// Database pool max connections
+    db_pool_max: u32,
+}
+
+impl Config {
+    /// Load configuration from environment variables
+    fn from_env() -> Self {
+        Self {
+            jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
+            access_token_expiry_minutes: std::env::var("ACCESS_TOKEN_EXPIRY_MINUTES")
+                .unwrap_or_else(|_| "15".to_string())
+                .parse()
+                .expect("ACCESS_TOKEN_EXPIRY_MINUTES must be a number"),
+            refresh_token_expiry_days: std::env::var("REFRESH_TOKEN_EXPIRY_DAYS")
+                .unwrap_or_else(|_| "7".to_string())
+                .parse()
+                .expect("REFRESH_TOKEN_EXPIRY_DAYS must be a number"),
+            cors_origin: std::env::var("CORS_ORIGIN").unwrap_or_else(|_| "*".to_string()),
+            rate_limit_requests: std::env::var("RATE_LIMIT_REQUESTS")
+                .unwrap_or_else(|_| "5".to_string())
+                .parse()
+                .expect("RATE_LIMIT_REQUESTS must be a number"),
+            rate_limit_seconds: std::env::var("RATE_LIMIT_SECONDS")
+                .unwrap_or_else(|_| "1".to_string())
+                .parse()
+                .expect("RATE_LIMIT_SECONDS must be a number"),
+            request_timeout_seconds: std::env::var("REQUEST_TIMEOUT_SECONDS")
+                .unwrap_or_else(|_| "20".to_string())
+                .parse()
+                .expect("REQUEST_TIMEOUT_SECONDS must be a number"),
+            db_pool_max: std::env::var("DB_POOL_MAX")
+                .unwrap_or_else(|_| "5".to_string())
+                .parse()
+                .expect("DB_POOL_MAX must be a number"),
+        }
+    }
+}
+
+// ============================================================================
 // APPLICATION STATE
 // ============================================================================
 
 /// Shared application state passed to all handlers
-/// Contains database connection pool and JWT secret
+/// Contains database connection pool and configuration
 #[derive(Clone)]
 struct AppState {
     db_pool: PgPool,
-    jwt_secret: String,
+    config: Config,
 }
 
 // ============================================================================
@@ -106,9 +169,10 @@ fn generate_access_token(
     username: &str,
     user_id: i32,
     jwt_secret: &str,
+    access_token_expiry_minutes: i64,
 ) -> Result<(String, Claims), (StatusCode, String)> {
     let now = Utc::now();
-    let access_exp = now + ChronoDuration::minutes(15);
+    let access_exp = now + ChronoDuration::minutes(access_token_expiry_minutes);
     let claims = Claims {
         sub: username.to_string(),
         user_id,
@@ -197,10 +261,11 @@ async fn verify_password(
 async fn create_refresh_token(
     user_id: i32,
     db_pool: &PgPool,
+    refresh_token_expiry_days: i64,
 ) -> Result<String, (StatusCode, String)> {
     let now = Utc::now();
     let refresh_token = uuid::Uuid::new_v4().to_string();
-    let refresh_exp = now + ChronoDuration::days(7);
+    let refresh_exp = now + ChronoDuration::days(refresh_token_expiry_days);
 
     // Store refresh token in DB
     let store_result = sqlx::query(
@@ -270,16 +335,26 @@ async fn login(
                 }
             } {
                 // Generate access token using helper
-                let (access_token, _claims) =
-                    match generate_access_token(&user.username, user.id, &state.jwt_secret) {
-                        Ok(result) => result,
-                        Err((status, msg)) => {
-                            return (status, msg).into_response();
-                        }
-                    };
+                let (access_token, _claims) = match generate_access_token(
+                    &user.username,
+                    user.id,
+                    &state.config.jwt_secret,
+                    state.config.access_token_expiry_minutes,
+                ) {
+                    Ok(result) => result,
+                    Err((status, msg)) => {
+                        return (status, msg).into_response();
+                    }
+                };
 
                 // Generate refresh token using helper
-                let refresh_token = match create_refresh_token(user.id, &state.db_pool).await {
+                let refresh_token = match create_refresh_token(
+                    user.id,
+                    &state.db_pool,
+                    state.config.refresh_token_expiry_days,
+                )
+                .await
+                {
                     Ok(token) => token,
                     Err((status, msg)) => {
                         return (
@@ -527,8 +602,12 @@ async fn refresh(
     };
 
     // Generate new access token using helper
-    let (access_token, _claims) = match generate_access_token(&username, user_id, &state.jwt_secret)
-    {
+    let (access_token, _claims) = match generate_access_token(
+        &username,
+        user_id,
+        &state.config.jwt_secret,
+        state.config.access_token_expiry_minutes,
+    ) {
         Ok(result) => result,
         Err((status, msg)) => {
             return (status, msg).into_response();
@@ -590,7 +669,7 @@ impl FromRequestParts<AppState> for AuthUser {
         let token = &auth_header[7..];
         let token_data = decode::<Claims>(
             token,
-            &DecodingKey::from_secret(state.jwt_secret.as_bytes()),
+            &DecodingKey::from_secret(state.config.jwt_secret.as_bytes()),
             &Validation::default(),
         );
 
@@ -636,6 +715,33 @@ impl FromRequestParts<AppState> for AuthUser {
 // APPLICATION ENTRY POINT
 // ============================================================================
 
+/// Build CORS layer based on configuration
+/// - "*" = permissive (allow all origins)
+/// - specific URL = allow only that origin
+fn build_cors_layer(cors_origin: &str) -> CorsLayer {
+    use axum::http::Method;
+
+    if cors_origin == "*" {
+        CorsLayer::permissive()
+    } else {
+        CorsLayer::new()
+            .allow_origin(
+                cors_origin
+                    .parse::<axum::http::HeaderValue>()
+                    .expect("Invalid CORS_ORIGIN value"),
+            )
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
+            .allow_headers(Any)
+            .allow_credentials(true)
+    }
+}
+
 /// Handle middleware errors (rate limit, timeout, etc.)
 async fn handle_middleware_error(err: BoxError) -> (StatusCode, String) {
     if err.is::<tower::timeout::error::Elapsed>() {
@@ -661,24 +767,27 @@ async fn main() {
         .with(EnvFilter::new(&log_level))
         .init();
 
+    // Load configuration
+    let config = Config::from_env();
+
     // Connect to PostgreSQL database
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     info!("⏳ Connecting to Database...");
 
     let db_pool = PgPoolOptions::new()
-        .max_connections(20)
-        .acquire_timeout(std::time::Duration::from_secs(3))
+        .max_connections(config.db_pool_max)
+        .acquire_timeout(Duration::from_secs(3))
         .connect(&db_url)
         .await
         .expect("❌ Failed to connect to Postgres");
 
     info!("✅ Database connected successfully!");
 
-    // Load JWT secret and create shared application state
-    let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+    // Load configuration and create shared application state
+    let config = Config::from_env();
     let app_state = AppState {
         db_pool,
-        jwt_secret,
+        config: config.clone(),
     };
 
     // Configure routes and middleware
@@ -697,15 +806,20 @@ async fn main() {
                 // 2. Compression: Compress response body (Gzip/Brotli)
                 .layer(CompressionLayer::new())
                 // 3. CORS: Allow cross-origin requests from frontend
-                .layer(CorsLayer::permissive())
+                .layer(build_cors_layer(&config.cors_origin))
                 // 4. HandleError: Catch errors from inner layers (RateLimit/Timeout) and convert to JSON
                 .layer(HandleErrorLayer::new(handle_middleware_error))
                 // 5. Buffer: Required for RateLimit (handles queuing/cloning of services)
                 .layer(BufferLayer::new(1024))
-                // 6. RateLimit: Limit requests per user/IP (5 req/sec)
-                .layer(RateLimitLayer::new(5, Duration::from_secs(1)))
-                // 7. Timeout: Abort request if processing takes too long (20s)
-                .layer(TimeoutLayer::new(Duration::from_secs(20))),
+                // 6. RateLimit: Limit requests per user/IP
+                .layer(RateLimitLayer::new(
+                    config.rate_limit_requests,
+                    Duration::from_secs(config.rate_limit_seconds),
+                ))
+                // 7. Timeout: Abort request if processing takes too long
+                .layer(TimeoutLayer::new(Duration::from_secs(
+                    config.request_timeout_seconds,
+                ))),
         );
 
     // Bind to host and port from environment or defaults
