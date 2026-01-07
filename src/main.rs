@@ -128,38 +128,63 @@ fn generate_access_token(
 }
 
 /// Hash a password using Argon2
-fn hash_password(password: &str) -> Result<String, (StatusCode, String)> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    match argon2.hash_password(password.as_bytes(), &salt) {
-        Ok(hash) => Ok(hash.to_string()),
-        Err(e) => {
-            error!(%e, "Password hashing failed");
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to hash password".to_string(),
-            ))
+/// Hash a password using Argon2 (runs on blocking thread)
+async fn hash_password(password: String) -> Result<String, (StatusCode, String)> {
+    tokio::task::spawn_blocking(move || {
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        match argon2.hash_password(password.as_bytes(), &salt) {
+            Ok(hash) => Ok(hash.to_string()),
+            Err(e) => {
+                error!(%e, "Password hashing failed");
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to hash password".to_string(),
+                ))
+            }
         }
-    }
+    })
+    .await
+    .map_err(|e| {
+        error!(%e, "Task join error");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?
 }
 
 /// Verify a password against a stored hash
-fn verify_password(password: &str, password_hash: &str) -> Result<bool, (StatusCode, String)> {
-    let parsed_hash = match PasswordHash::new(password_hash) {
-        Ok(hash) => hash,
-        Err(e) => {
-            error!(%e, "Failed to parse stored password hash");
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to verify password".to_string(),
-            ));
-        }
-    };
+/// Verify a password against a stored hash (runs on blocking thread)
+async fn verify_password(
+    password: String,
+    password_hash: String,
+) -> Result<bool, (StatusCode, String)> {
+    tokio::task::spawn_blocking(move || {
+        let parsed_hash = match PasswordHash::new(&password_hash) {
+            Ok(hash) => hash,
+            Err(e) => {
+                error!(%e, "Failed to parse stored password hash");
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to verify password".to_string(),
+                ));
+            }
+        };
 
-    let argon2 = Argon2::default();
-    Ok(argon2
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .is_ok())
+        let argon2 = Argon2::default();
+        Ok(argon2
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_ok())
+    })
+    .await
+    .map_err(|e| {
+        error!(%e, "Task join error");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?
 }
 
 /// Generate and store a new refresh token
@@ -228,7 +253,7 @@ async fn login(
     match select_user {
         Ok(Some(user)) => {
             // Verify password using helper
-            if match verify_password(&payload.password, &user.password) {
+            if match verify_password(payload.password.clone(), user.password.clone()).await {
                 Ok(valid) => valid,
                 Err((status, msg)) => {
                     return (
@@ -314,7 +339,7 @@ async fn register(
     info!("Register endpoint hit");
 
     // Generate random salt and hash password using helper
-    let password_hash = match hash_password(&payload.password) {
+    let password_hash = match hash_password(payload.password.clone()).await {
         Ok(hash) => hash,
         Err((status, msg)) => {
             return (
