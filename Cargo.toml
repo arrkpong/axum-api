@@ -1,5 +1,5 @@
 [package]
-name = "civil-park-api"
+name = "axum-api"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,8 +7,8 @@ edition = "2024"
 # Web framework
 axum = { version = "0.8.8", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
-tower = { version = "0.5.2" }
-tower-http = { version = "0.6.8", features = ["cors", "trace", "timeout"] }
+tower = { version = "0.5.2", features = ["util", "limit", "timeout", "buffer"] }
+tower-http = { version = "0.6.8", features = ["cors", "trace", "timeout", "compression-full"] }
 utoipa = { version = "5.4.0", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 

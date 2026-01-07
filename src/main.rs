@@ -1,6 +1,7 @@
 use axum::response::IntoResponse;
 use axum::{
-    Json, Router,
+    BoxError, Json, Router,
+    error_handling::HandleErrorLayer,
     extract::State,
     http::StatusCode,
     routing::{get, post},
@@ -9,8 +10,13 @@ use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use std::time::Duration;
 
-use tower_http::trace::TraceLayer;
+use tower::ServiceBuilder;
+use tower::buffer::BufferLayer;
+use tower::limit::RateLimitLayer;
+use tower::timeout::TimeoutLayer;
+use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing::{error, info, instrument, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -21,7 +27,7 @@ use argon2::{
 use axum::extract::FromRequestParts;
 use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
-use chrono::{Duration, Utc};
+use chrono::{Duration as ChronoDuration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 
 // ============================================================================
@@ -102,7 +108,7 @@ fn generate_access_token(
     jwt_secret: &str,
 ) -> Result<(String, Claims), (StatusCode, String)> {
     let now = Utc::now();
-    let access_exp = now + Duration::minutes(15);
+    let access_exp = now + ChronoDuration::minutes(15);
     let claims = Claims {
         sub: username.to_string(),
         user_id,
@@ -194,7 +200,7 @@ async fn create_refresh_token(
 ) -> Result<String, (StatusCode, String)> {
     let now = Utc::now();
     let refresh_token = uuid::Uuid::new_v4().to_string();
-    let refresh_exp = now + Duration::days(7);
+    let refresh_exp = now + ChronoDuration::days(7);
 
     // Store refresh token in DB
     let store_result = sqlx::query(
@@ -630,6 +636,18 @@ impl FromRequestParts<AppState> for AuthUser {
 // APPLICATION ENTRY POINT
 // ============================================================================
 
+/// Handle middleware errors (rate limit, timeout, etc.)
+async fn handle_middleware_error(err: BoxError) -> (StatusCode, String) {
+    if err.is::<tower::timeout::error::Elapsed>() {
+        (StatusCode::REQUEST_TIMEOUT, "Request timed out".to_string())
+    } else {
+        (
+            StatusCode::TOO_MANY_REQUESTS,
+            format!("Request failed: {}", err),
+        )
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // Load environment variables from .env file
@@ -672,7 +690,23 @@ async fn main() {
         .route("/api/v1/refresh", post(refresh))
         .route("/api/v1/profile", get(profile))
         .with_state(app_state)
-        .layer(TraceLayer::new_for_http());
+        .layer(
+            ServiceBuilder::new()
+                // 1. Trace: Log every request/response (even if blocked by rate limit)
+                .layer(TraceLayer::new_for_http())
+                // 2. Compression: Compress response body (Gzip/Brotli)
+                .layer(CompressionLayer::new())
+                // 3. CORS: Allow cross-origin requests from frontend
+                .layer(CorsLayer::permissive())
+                // 4. HandleError: Catch errors from inner layers (RateLimit/Timeout) and convert to JSON
+                .layer(HandleErrorLayer::new(handle_middleware_error))
+                // 5. Buffer: Required for RateLimit (handles queuing/cloning of services)
+                .layer(BufferLayer::new(1024))
+                // 6. RateLimit: Limit requests per user/IP (5 req/sec)
+                .layer(RateLimitLayer::new(5, Duration::from_secs(1)))
+                // 7. Timeout: Abort request if processing takes too long (20s)
+                .layer(TimeoutLayer::new(Duration::from_secs(20))),
+        );
 
     // Bind to host and port from environment or defaults
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
