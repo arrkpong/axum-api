@@ -14,7 +14,7 @@ utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.148" }
+serde_json = { version = "1.0.149" }
 
 # Database
 sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "macros"] }
@@ -37,3 +37,4 @@ thiserror = { version = "2.0.17" }
 # Logging
 tracing = { version = "0.1.44" }
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+async-trait = "0.1.89"
