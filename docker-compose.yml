@@ -28,6 +28,9 @@ services:
     # Load environment variables (DATABASE_URL, JWT secrets, etc.).
     env_file:
       - .env
+    environment:
+      # Override DATABASE_URL for Docker networking (host needs to be 'db' not 'localhost')
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-axum_db}
     # Start after the database is healthy.
     depends_on:
       db:

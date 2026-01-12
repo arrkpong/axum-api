@@ -3,6 +3,13 @@ name = "axum-api"
 version = "0.1.0"
 edition = "2024"
 
+# Optimize release builds
+[profile.release]
+strip = true      # Automatically strip symbols from the binary -> smaller image
+opt-level = 3     # Maximum optimization
+lto = true        # Link Time Optimization -> smaller & faster
+codegen-units = 1 # Slower build, but better optimization
+
 [dependencies]
 # Web framework
 axum = { version = "0.8.8", features = ["macros"] }

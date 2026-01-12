@@ -35,8 +35,8 @@ RUN touch src/main.rs
 # Build the production binary (uses cached dependencies).
 RUN cargo build --release --locked
 
-# Runtime stage: minimal OS with only the compiled binary.
-FROM debian:bookworm-slim AS runtime
+# Runtime stage: Ubuntu LTS with compiled binary.
+FROM ubuntu:22.04 AS runtime
 
 WORKDIR /app
 
