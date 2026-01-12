@@ -38,6 +38,14 @@ services:
     # Automatically restart unless explicitly stopped.
     restart: unless-stopped
 
+  proxy:
+    build: ./pingora_proxy
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
 volumes:
   # Named volume for Postgres data.
   pgdata:
