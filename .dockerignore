@@ -1,0 +1,17 @@
+# Rust build output (large, not needed in build context).
+target
+
+# VCS metadata.
+.git
+.gitignore
+
+# Local environment files (should be injected via env_file at runtime).
+.env
+.env.*
+
+# IDE/editor settings.
+.idea
+.vscode
+
+# Local logs.
+*.log

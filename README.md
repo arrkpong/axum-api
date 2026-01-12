@@ -1,152 +1,117 @@
-# Axum API
+# Axum API (Production Ready)
 
 ![Rust](https://img.shields.io/badge/Rust-1.92-orange?logo=rust)
-![Axum](https://img.shields.io/badge/Axum-0.8-blue)
+![Axum](https://img.shields.io/badge/Axum-0.8.8-blue)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18.1-336791?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-336791?logo=postgresql&logoColor=white)
 
-A Rust REST API built with [Axum](https://github.com/tokio-rs/axum) featuring complete authentication system.
+A robust, production-ready REST API built with [Axum](https://github.com/tokio-rs/axum), featuring a complete authentication system, secure password hashing, and Docker containerization.
 
-## Features
+## 🚀 Features
 
-- 🔐 **Authentication** - Register, Login, Logout with JWT
-- 🎫 **JWT Tokens** - Access tokens + Refresh tokens
-- 🔒 **Password Security** - Argon2 hashing (non-blocking)
-- 📝 **Token Blacklist** - Proper logout with token revocation
-- 📊 **Structured Logging** - Tracing with configurable log levels
-- 🛡️ **Middleware** - CORS, Compression, Rate Limit, Timeout
-- ⚙️ **Configurable** - All settings via `.env`
+- **Authentication:** Secure JWT (Access + Refresh Tokens) with rotation and blacklist revocation.
+- **Security:** Argon2id password hashing, HTTP-only cookie support, and parameterized SQL queries.
+- **Performance:** Asynchronous Request handling, connection pooling, and optimized Docker builds.
+- **Robustness:** Structured logging (Tracing), Rate limiting, CORS, and Graceful shutdown.
+- **Dockerized:** Multi-stage builds, non-root user execution, and health checks.
 
-## Prerequisites
+## 🛠️ Tech Stack
 
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable)
-- [PostgreSQL](https://www.postgresql.org/download/)
+- **Language:** Rust 1.92+
+- **Web Framework:** Axum 0.8
+- **Database:** PostgreSQL 18.1 (Alpine)
+- **ORM/Query Builder:** SQLx (Compile-time checked queries)
+- **Serialization:** Serde & Serde JSON
+- **Runtime:** Tokio
 
-## Environment Variables
+## 🐳 Quick Start (Docker - Recommended)
 
-Create a `.env` file:
+1.  **Clone the repository:**
 
-```env
-# Database
-DATABASE_URL=postgres://postgres:password@localhost:5432/axum_db
-DB_POOL_MAX=5
+    ```bash
+    git clone https://github.com/yourusername/axum-api.git
+    cd axum-api
+    ```
 
-# Server
-HOST=0.0.0.0
-PORT=8080
+2.  **Configure Environment:**
 
-# Security
-JWT_SECRET=your_jwt_secret_key
-ACCESS_TOKEN_EXPIRY_MINUTES=15
-REFRESH_TOKEN_EXPIRY_DAYS=7
+    ```bash
+    cp .env.example .env
+    # Edit .env and set a strong JWT_SECRET and POSTGRES_PASSWORD
+    ```
 
-# CORS (* for permissive, or specific origin)
-CORS_ORIGIN=*
+3.  **Start Services:**
 
-# Rate Limiting
-RATE_LIMIT_REQUESTS=5
-RATE_LIMIT_SECONDS=1
-REQUEST_TIMEOUT_SECONDS=20
+    ```bash
+    docker compose up -d --build
+    ```
 
-# Logging
-LOG_LEVEL=info
-```
+4.  **Initialize Database:**
 
-**Generate random JWT_SECRET:**
+    ```bash
+    # Run migrations inside the container
+    cat migrations/*.sql | docker compose exec -T db psql -U postgres -d axum_db
+    ```
 
-```powershell
-# PowerShell (Windows)
-[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }) -as [byte[]])
+5.  **Verify:**
+    ```bash
+    curl http://localhost:8080/
+    # {"message":"Welcome to the Index API","status":"success"}
+    ```
 
-# Or use OpenSSL
-openssl rand -base64 32
-```
+## 💻 Local Development
 
-## Database Setup
+1.  **Prerequisites:** Rust, built-in Postgres running locally (or via Docker).
+2.  **Setup .env:** Ensure `DATABASE_URL` points to `localhost`.
+3.  **Run:**
 
-Run migrations in order:
+    ```bash
+    # Install sqlx-cli
+    cargo install sqlx-cli
 
-```bash
-psql -U postgres -d axum_db -f migrations/20260106_create_auth_users.sql
-psql -U postgres -d axum_db -f migrations/20260106_create_token_blacklist.sql
-psql -U postgres -d axum_db -f migrations/20260106_create_refresh_tokens.sql
-```
+    # Setup DB
+    sqlx database create
+    sqlx migrate run
 
-## Development
+    # Start Server
+    cargo run
+    ```
 
-```bash
-# Run server
-cargo run
-
-# Build for release
-cargo build --release
-
-# Format code
-cargo fmt
-
-# Check for errors and warnings
-cargo clippy
-```
-
-## API Endpoints
-
-| Method | Endpoint           | Description        | Auth     |
-| ------ | ------------------ | ------------------ | -------- |
-| GET    | `/`                | Health check       | Public   |
-| POST   | `/api/v1/register` | Create new user    | Public   |
-| POST   | `/api/v1/login`    | Get tokens         | Public   |
-| POST   | `/api/v1/refresh`  | Renew access token | Public   |
-| POST   | `/api/v1/logout`   | Revoke tokens      | 🔒 Token |
-| GET    | `/api/v1/profile`  | User profile       | 🔒 Token |
-
-## Usage Examples
-
-### Register
-
-```bash
-curl -X POST http://localhost:8080/api/v1/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"user","password":"pass123","email":"user@example.com"}'
-```
-
-### Login
-
-```bash
-curl -X POST http://localhost:8080/api/v1/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"user","password":"pass123"}'
-```
-
-### Access Protected Route
-
-```bash
-curl http://localhost:8080/api/v1/profile \
-  -H "Authorization: Bearer <access_token>"
-```
-
-### Refresh Token
-
-```bash
-curl -X POST http://localhost:8080/api/v1/refresh \
-  -H "Content-Type: application/json" \
-  -d '{"refresh_token":"<refresh_token>"}'
-```
-
-## Architecture
+## 📂 Project Structure
 
 ```
-src/main.rs
-├── Config          - Environment configuration
-├── AppState        - Shared state (db_pool, config)
-├── Middleware      - TraceLayer, CORS, Compression, RateLimit, Timeout
-├── Handlers        - login, register, logout, refresh, profile
-└── AuthUser        - JWT extractor
+src/
+├── main.rs         # Application entry point & Middleware setup
+├── config.rs       # Type-safe configuration from .env
+├── state.rs        # Shared application state (DbPool)
+├── routes/         # Route definitions (Auth, User, etc.)
+├── handlers/       # Request controllers & business logic
+├── models/         # Data structures & Database schemas
+└── utils/          # Helpers (Hashing, JWT, Validation)
 ```
 
-## Documentation
+## 🔌 API Endpoints
 
-See [docs/README.md](docs/README.md) for Thai documentation on Rust crates used in this project.
+| Method | Endpoint                | Description                            | Auth Required |
+| :----- | :---------------------- | :------------------------------------- | :-----------: |
+| GET    | `/`                     | Health Check                           |      ❌       |
+| POST   | `/api/v1/auth/register` | Register new user                      |      ❌       |
+| POST   | `/api/v1/auth/login`    | Login (Returns Access + Refresh Token) |      ❌       |
+| POST   | `/api/v1/auth/refresh`  | Refresh Access Token                   |      ❌       |
+| POST   | `/api/v1/auth/logout`   | Logout (Blacklists token)              |      ✅       |
+| GET    | `/api/v1/user/profile`  | Get current user info                  |      ✅       |
 
-## License
+## 🔒 Security Checklist for Production
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Before deploying to a public server:
+
+- [ ] Change `JWT_SECRET` to a long, random string.
+- [ ] Change `POSTGRES_PASSWORD` to a strong password.
+- [ ] Set `CORS_ORIGIN` to your specific frontend domain (e.g., `https://example.com`).
+- [ ] Run behind a Reverse Proxy (Nginx/Traefik) with HTTPS enabled.
+- [ ] Ensure database port `5432` is NOT exposed to the public internet.
+
+## 📄 License
+
+This project is licensed under the MIT License.

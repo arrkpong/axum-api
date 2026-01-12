@@ -1,0 +1,40 @@
+services:
+  db:
+    # PostgreSQL database for local/prod-like runs.
+    image: postgres:18.1-alpine
+    environment:
+      # Load credentials from environment (set in .env or CI/CD secrets).
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-axum_db}
+    volumes:
+      # Persist database data across container restarts (Postgres 18+ uses /var/lib/postgresql).
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # Wait until Postgres is ready to accept connections.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d axum_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Automatically restart unless explicitly stopped.
+    restart: unless-stopped
+
+  api:
+    # Build the Rust service from the local Dockerfile.
+    build: .
+    # Expose the HTTP API port.
+    ports:
+      - "8080:8080"
+    # Load environment variables (DATABASE_URL, JWT secrets, etc.).
+    env_file:
+      - .env
+    # Start after the database is healthy.
+    depends_on:
+      db:
+        condition: service_healthy
+    # Automatically restart unless explicitly stopped.
+    restart: unless-stopped
+
+volumes:
+  # Named volume for Postgres data.
+  pgdata:
