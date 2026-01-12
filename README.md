@@ -60,6 +60,27 @@ A robust, production-ready REST API built with [Axum](https://github.com/tokio-r
     # {"message":"Welcome to the Index API","status":"success"}
     ```
 
+## Performance Benchmarking
+
+To test the API performance under load, you can use **Apache Benchmark (ab)** via Docker (no installation required).
+
+1. **Start the API:**
+
+   ```bash
+   docker compose up -d
+   ```
+
+2. **Run Benchmark:**
+   (Test 500 requests with 20 concurrent users)
+
+   ```bash
+   # Linux / macOS
+   docker run --rm --net=host httpd:alpine ab -n 500 -c 20 http://localhost:8080/
+
+   # Windows (Docker Desktop)
+   docker run --rm --net=host httpd:alpine ab -n 500 -c 20 http://host.docker.internal:8080/
+   ```
+
 ## 💻 Local Development
 
 1.  **Prerequisites:** Rust, built-in Postgres running locally (or via Docker).
