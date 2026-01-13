@@ -37,3 +37,33 @@ pub async fn io_bound() -> impl IntoResponse {
         "duration_ms": duration.as_millis()
     }))
 }
+
+// Database-bound: Real DB Query
+#[derive(sqlx::FromRow, serde::Serialize)]
+struct BenchmarkUser {
+    id: i32,
+    username: String,
+    email: Option<String>,
+}
+
+pub async fn db_read(
+    axum::extract::State(state): axum::extract::State<crate::state::AppState>,
+) -> impl IntoResponse {
+    let start = std::time::Instant::now();
+
+    // Fetch 50 users
+    let users =
+        sqlx::query_as::<_, BenchmarkUser>("SELECT id, username, email FROM auth_users LIMIT 50")
+            .fetch_all(&state.db_pool)
+            .await
+            .unwrap_or_else(|_| vec![]);
+
+    let duration = start.elapsed();
+
+    Json(json!({
+        "test": "db_read",
+        "description": "SELECT * FROM auth_users LIMIT 50",
+        "result_count": users.len(),
+        "duration_ms": duration.as_millis()
+    }))
+}
