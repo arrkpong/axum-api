@@ -1,0 +1,9 @@
+use crate::handlers::benchmark;
+use crate::state::AppState;
+use axum::{Router, routing::get};
+
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/benchmark/cpu", get(benchmark::cpu_bound))
+        .route("/benchmark/io", get(benchmark::io_bound))
+}
