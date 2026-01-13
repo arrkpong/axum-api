@@ -59,17 +59,17 @@ flowchart TB
     API -->|"TCP<br/>Port 5432"| DB
     API -.->|"TCP<br/>Port 6379"| Cache
 
-    %% Styling
-    style Internet fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    style Edge fill:#fce4ec,stroke:#880e4f,stroke-width:2px
-    style Application fill:#e8eaf6,stroke:#1a237e,stroke-width:2px
-    style Data fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    %% Professional Color Palette (Bootstrap-inspired)
+    style Internet fill:#f8f9fa,stroke:#6c757d,stroke-width:1px
+    style Edge fill:#fff3cd,stroke:#856404,stroke-width:2px
+    style Application fill:#cce5ff,stroke:#004085,stroke-width:2px
+    style Data fill:#d4edda,stroke:#155724,stroke-width:2px
 
-    style Client fill:#fff,stroke:#01579b,stroke-width:2px
-    style Proxy fill:#f48fb1,stroke:#880e4f,stroke-width:2px,color:#000
-    style API fill:#7986cb,stroke:#1a237e,stroke-width:2px,color:#fff
-    style DB fill:#81c784,stroke:#1b5e20,stroke-width:2px,color:#000
-    style Cache fill:#a5d6a7,stroke:#1b5e20,stroke-width:1px,stroke-dasharray: 5 5
+    style Client fill:#ffffff,stroke:#6c757d,stroke-width:2px
+    style Proxy fill:#ffc107,stroke:#856404,stroke-width:2px
+    style API fill:#007bff,stroke:#004085,stroke-width:2px,color:#fff
+    style DB fill:#28a745,stroke:#155724,stroke-width:2px,color:#fff
+    style Cache fill:#6c757d,stroke:#495057,stroke-width:1px,stroke-dasharray:5 5,color:#fff
 ```
 
 | Service           | Port | Description                                 |
