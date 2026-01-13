@@ -15,7 +15,12 @@ codegen-units = 1 # Slower build, but better optimization
 axum = { version = "0.8.8", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
 tower = { version = "0.5.2", features = ["util", "limit", "timeout", "buffer"] }
-tower-http = { version = "0.6.8", features = ["cors", "trace", "timeout", "compression-full"] }
+tower-http = { version = "0.6.8", features = [
+    "cors",
+    "trace",
+    "timeout",
+    "compression-full",
+] }
 utoipa = { version = "5.4.0", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 
@@ -24,7 +29,16 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149" }
 
 # Database
-sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "macros"] }
+sqlx = { version = "0.8.6", features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "macros",
+] }
+
+# Cache (Redis-compatible / Dragonfly)
+redis = { version = "1.0.2", features = ["tokio-comp", "connection-manager"] }
 
 # Authentication & Security
 argon2 = { version = "0.5.3" }

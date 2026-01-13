@@ -19,6 +19,10 @@ pub struct Config {
     pub request_timeout_seconds: u64,
     /// Database pool max connections
     pub db_pool_max: u32,
+    /// Redis/Dragonfly connection URL
+    pub redis_url: String,
+    /// Cache TTL in seconds
+    pub cache_ttl_seconds: u64,
 }
 
 impl Config {
@@ -51,6 +55,12 @@ impl Config {
                 .unwrap_or_else(|_| "5".to_string())
                 .parse()
                 .expect("DB_POOL_MAX must be a number"),
+            redis_url: env::var("REDIS_URL")
+                .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
+            cache_ttl_seconds: env::var("CACHE_TTL_SECONDS")
+                .unwrap_or_else(|_| "300".to_string())
+                .parse()
+                .expect("CACHE_TTL_SECONDS must be a number"),
         }
     }
 }

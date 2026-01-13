@@ -31,10 +31,14 @@ services:
     environment:
       # Override DATABASE_URL for Docker networking (host needs to be 'db' not 'localhost')
       - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-axum_db}
-    # Start after the database is healthy.
+      # Override REDIS_URL for Docker networking
+      - REDIS_URL=redis://dragonfly:6379
+    # Start after the database and cache are ready.
     depends_on:
       db:
         condition: service_healthy
+      dragonfly:
+        condition: service_started
     # Automatically restart unless explicitly stopped.
     restart: unless-stopped
 
@@ -46,6 +50,17 @@ services:
       - api
     restart: unless-stopped
 
+  # L2 Data Cache (Redis-compatible)
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly
+    ports:
+      - "6379:6379"
+    volumes:
+      - dragonfly_data:/data
+    restart: unless-stopped
+
 volumes:
   # Named volume for Postgres data.
   pgdata:
+  # Named volume for Dragonfly cache data.
+  dragonfly_data:

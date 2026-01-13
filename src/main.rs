@@ -92,9 +92,22 @@ async fn main() {
 
     info!("✅ Database connected successfully!");
 
+    // Connect to Redis/Dragonfly cache
+    info!("⏳ Connecting to Cache (Dragonfly)...");
+    let redis_client =
+        redis::Client::open(config.redis_url.as_str()).expect("❌ Invalid REDIS_URL");
+    let redis_conn = redis::aio::ConnectionManager::new(redis_client)
+        .await
+        .expect("❌ Failed to connect to Redis/Dragonfly");
+    info!("✅ Cache connected successfully!");
+
+    // Create cache wrapper
+    let cache = utils::cache::Cache::new(redis_conn, config.cache_ttl_seconds);
+
     // Create shared application state
     let app_state = AppState {
         db_pool,
+        cache,
         config: config.clone(),
     };
 

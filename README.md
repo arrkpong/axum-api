@@ -42,7 +42,7 @@ flowchart TB
     end
 
     subgraph Edge["🛡️ Edge Layer"]
-        Proxy["Pingora Proxy"]
+        Proxy["Pingora Proxy<br/>(L1 HTTP Cache)"]
     end
 
     subgraph Application["⚙️ Application Layer"]
@@ -50,14 +50,14 @@ flowchart TB
     end
 
     subgraph Data["💾 Data Layer"]
+        Cache["Dragonfly<br/>(L2 Data Cache)"]
         DB[("PostgreSQL")]
-        Cache["Redis"]
     end
 
     Client -->|"Port 80"| Proxy
     Proxy -->|"Port 8080"| API
+    API <-->|"Port 6379"| Cache
     API -->|"Port 5432"| DB
-    API -.->|"Future"| Cache
 
     %% High Contrast Styling
     style Internet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
@@ -68,15 +68,16 @@ flowchart TB
     style Client fill:#1565C0,stroke:#0D47A1,stroke-width:2px,color:#FFF
     style Proxy fill:#C2185B,stroke:#880E4F,stroke-width:2px,color:#FFF
     style API fill:#512DA8,stroke:#311B92,stroke-width:2px,color:#FFF
+    style Cache fill:#FF6F00,stroke:#E65100,stroke-width:2px,color:#FFF
     style DB fill:#2E7D32,stroke:#1B5E20,stroke-width:2px,color:#FFF
-    style Cache fill:#66BB6A,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
 ```
 
-| Service           | Port | Description                                 |
-| ----------------- | ---- | ------------------------------------------- |
-| **Pingora Proxy** | 80   | Edge gateway, load balancing, rate limiting |
-| **Axum API**      | 8080 | Core business logic, authentication         |
-| **PostgreSQL**    | 5432 | Primary data store                          |
+| Service           | Port | Description                                |
+| ----------------- | ---- | ------------------------------------------ |
+| **Pingora Proxy** | 80   | Edge gateway, L1 HTTP cache, rate limiting |
+| **Axum API**      | 8080 | Business logic, authentication             |
+| **Dragonfly**     | 6379 | L2 data cache (sessions, query results)    |
+| **PostgreSQL**    | 5432 | Primary data store                         |
 
 ---
 
