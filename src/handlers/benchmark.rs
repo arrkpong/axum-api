@@ -67,3 +67,32 @@ pub async fn db_read(
         "duration_ms": duration.as_millis()
     }))
 }
+
+pub async fn db_write(
+    axum::extract::State(state): axum::extract::State<crate::state::AppState>,
+) -> impl IntoResponse {
+    let start = std::time::Instant::now();
+    let unique_id = uuid::Uuid::new_v4().to_string();
+    let email = format!("bm_{}@test.com", unique_id);
+    let username = format!("bm_{}", unique_id);
+
+    // Insert dummy user
+    // Assuming created_at/updated_at have defaults or are handled by DB triggers
+    let _ = sqlx::query(
+        "INSERT INTO auth_users (username, email, password_hash, role, is_active) VALUES ($1, $2, 'dummy_hash', 'user', true)"
+    )
+    .bind(username)
+    .bind(email)
+    .execute(&state.db_pool)
+    .await;
+
+    let duration = start.elapsed();
+
+    Json(json!(
+        {
+            "test": "db_write",
+            "description": "INSERT 1 row into auth_users",
+            "duration_ms": duration.as_millis()
+        }
+    ))
+}
