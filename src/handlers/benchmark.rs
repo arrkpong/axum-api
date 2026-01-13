@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use axum::{Json, response::IntoResponse};
 use serde_json::json;
 use tokio::time::{Duration, sleep};

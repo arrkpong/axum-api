@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::handlers::benchmark;
 use crate::state::AppState;
 use axum::{Router, routing::get};

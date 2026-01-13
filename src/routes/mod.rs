@@ -11,5 +11,5 @@ pub fn create_router() -> Router<AppState> {
         .route("/", get(general::index))
         .merge(auth::routes())
         .merge(user::routes())
-        .merge(benchmark::routes())
+    // .merge(benchmark::routes())
 }
