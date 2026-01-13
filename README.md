@@ -38,40 +38,38 @@ Civil Park API is a production-ready backend service designed for high throughpu
 ```mermaid
 flowchart TB
     subgraph Internet["🌐 Internet"]
-        Client["👤 Client<br/><small>Browser / Mobile / API</small>"]
+        Client["👤 Client"]
     end
 
     subgraph Edge["🛡️ Edge Layer"]
-        Proxy["<b>Pingora Proxy</b><br/>━━━━━━━━━━━━<br/>• Load Balancing<br/>• Rate Limiting<br/>• Health Checks"]
+        Proxy["Pingora Proxy"]
     end
 
     subgraph Application["⚙️ Application Layer"]
-        API["<b>Axum API</b><br/>━━━━━━━━━━━━<br/>• REST Endpoints<br/>• JWT Auth<br/>• Business Logic"]
+        API["Axum API"]
     end
 
     subgraph Data["💾 Data Layer"]
-        DB[("<b>PostgreSQL</b><br/>━━━━━━━━━━━━<br/>• Users<br/>• Tokens<br/>• App Data")]
-        Cache["<b>Redis</b><br/><small>(Future)</small>"]
+        DB[("PostgreSQL")]
+        Cache["Redis"]
     end
 
-    Client -->|"HTTP/1.1<br/>Port 80"| Proxy
-    Proxy -->|"HTTP<br/>Port 8080"| API
-    API -->|"TCP<br/>Port 5432"| DB
-    API -.->|"TCP<br/>Port 6379"| Cache
+    Client -->|"Port 80"| Proxy
+    Proxy -->|"Port 8080"| API
+    API -->|"Port 5432"| DB
+    API -.->|"Future"| Cache
 
-    %% High Contrast Styling (WCAG AA Compliant)
-    %% Layer backgrounds - light with dark borders
-    style Internet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
-    style Edge fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#880E4F
-    style Application fill:#EDE7F6,stroke:#512DA8,stroke-width:2px,color:#311B92
-    style Data fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    %% High Contrast Styling
+    style Internet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style Edge fill:#FCE4EC,stroke:#C2185B,stroke-width:2px
+    style Application fill:#EDE7F6,stroke:#512DA8,stroke-width:2px
+    style Data fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
 
-    %% Node styling - Dark backgrounds with white text for maximum contrast
-    style Client fill:#1565C0,stroke:#0D47A1,stroke-width:2px,color:#FFFFFF
-    style Proxy fill:#C2185B,stroke:#880E4F,stroke-width:2px,color:#FFFFFF
-    style API fill:#512DA8,stroke:#311B92,stroke-width:2px,color:#FFFFFF
-    style DB fill:#2E7D32,stroke:#1B5E20,stroke-width:2px,color:#FFFFFF
-    style Cache fill:#66BB6A,stroke:#2E7D32,stroke-width:1px,stroke-dasharray:5 5,color:#1B5E20
+    style Client fill:#1565C0,stroke:#0D47A1,stroke-width:2px,color:#FFF
+    style Proxy fill:#C2185B,stroke:#880E4F,stroke-width:2px,color:#FFF
+    style API fill:#512DA8,stroke:#311B92,stroke-width:2px,color:#FFF
+    style DB fill:#2E7D32,stroke:#1B5E20,stroke-width:2px,color:#FFF
+    style Cache fill:#66BB6A,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
 ```
 
 | Service           | Port | Description                                 |
