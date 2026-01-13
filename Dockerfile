@@ -43,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the compiled binary from the builder stage.
-COPY --from=builder /app/target/release/axum-api /app/axum-api
+COPY --from=builder /app/target/release/civil-park-api /app/civil-park-api
 
 # Create a non-root user for better security and take ownership.
 RUN groupadd -r app && useradd -r -g app -d /app -s /usr/sbin/nologin app \
@@ -60,4 +60,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Start the application.
-CMD ["/app/axum-api"]
+CMD ["/app/civil-park-api"]
