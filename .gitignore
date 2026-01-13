@@ -6,9 +6,6 @@ target/
 .env.local
 .env.*.local
 
-# SQLx offline cache (regenerate with cargo sqlx prepare)
-.sqlx/
-
 # IDE settings
 .idea/
 .vscode/
