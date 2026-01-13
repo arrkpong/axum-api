@@ -36,15 +36,40 @@ Civil Park API is a production-ready backend service designed for high throughpu
 ## 🏗️ Architecture
 
 ```mermaid
-graph LR
-    Client([👤 Client]) -->|HTTP :80| Proxy[🛡️ Pingora Proxy]
-    subgraph Docker Network
-        Proxy -->|:8080| API[⚙️ Axum API]
-        API -->|:5432| DB[(🐘 PostgreSQL)]
+flowchart TB
+    subgraph Internet["🌐 Internet"]
+        Client["👤 Client<br/><small>Browser / Mobile / API Consumer</small>"]
     end
-    style Proxy fill:#f9f,stroke:#333,stroke-width:2px
-    style API fill:#bbf,stroke:#333,stroke-width:2px
-    style DB fill:#bfb,stroke:#333,stroke-width:2px
+
+    subgraph Edge["🛡️ Edge Layer"]
+        Proxy["<b>Pingora Proxy</b><br/>━━━━━━━━━━━━<br/>• Load Balancing<br/>• Rate Limiting<br/>• Health Checks"]
+    end
+
+    subgraph Application["⚙️ Application Layer"]
+        API["<b>Axum API</b><br/>━━━━━━━━━━━━<br/>• REST Endpoints<br/>• JWT Auth<br/>• Business Logic"]
+    end
+
+    subgraph Data["💾 Data Layer"]
+        DB[("<b>PostgreSQL</b><br/>━━━━━━━━━━━━<br/>• Users<br/>• Auth Tokens<br/>• App Data")]
+        Cache["<b>Redis</b><br/><small>(Future)</small>"]
+    end
+
+    Client -->|"HTTP/1.1<br/>Port 80"| Proxy
+    Proxy -->|"HTTP<br/>Port 8080"| API
+    API -->|"TCP<br/>Port 5432"| DB
+    API -.->|"TCP<br/>Port 6379"| Cache
+
+    %% Styling
+    style Internet fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    style Edge fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    style Application fill:#e8eaf6,stroke:#1a237e,stroke-width:2px
+    style Data fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    style Client fill:#fff,stroke:#01579b,stroke-width:2px
+    style Proxy fill:#f48fb1,stroke:#880e4f,stroke-width:2px,color:#000
+    style API fill:#7986cb,stroke:#1a237e,stroke-width:2px,color:#fff
+    style DB fill:#81c784,stroke:#1b5e20,stroke-width:2px,color:#000
+    style Cache fill:#a5d6a7,stroke:#1b5e20,stroke-width:1px,stroke-dasharray: 5 5
 ```
 
 | Service           | Port | Description                                 |
