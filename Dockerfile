@@ -10,13 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 # Copy only the manifests first so dependency layers can be cached.
 COPY Cargo.toml Cargo.lock ./
 
-# Copy SQLx offline cache for compile-time query verification.
-COPY .sqlx .sqlx
-
 # Create a dummy main.rs to compile dependencies without full source.
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # Enable SQLx offline mode for builds without database access.
+# Note: If .sqlx folder exists, it will be copied with COPY . . later.
 ENV SQLX_OFFLINE=true
 
 # Build dependencies only (this layer will be cached).
