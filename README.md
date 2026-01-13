@@ -1,138 +1,305 @@
-# Axum API (Production Ready)
+# 🏗️ Civil Park API
 
-![Rust](https://img.shields.io/badge/Rust-1.92-orange?logo=rust)
-![Axum](https://img.shields.io/badge/Axum-0.8.8-blue)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18.1-336791?logo=postgresql&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
+<div align="center">
 
-A robust, production-ready REST API built with [Axum](https://github.com/tokio-rs/axum), featuring a complete authentication system, secure password hashing, and Docker containerization.
+[![CI](https://img.shields.io/github/actions/workflow/status/civil-park-international/civil-park-api/ci.yml?style=for-the-badge&label=Build)](https://github.com/civil-park-international/civil-park-api/actions)
+[![Rust](https://img.shields.io/badge/rust-1.92%2B-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org)
+[![Docker](https://img.shields.io/badge/docker-ready-0db7ed?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
 
-## 🚀 Features
+**High-performance REST API** for the Civil Park ecosystem.  
+Built with **Rust (Axum)** • Shielded by **Cloudflare Pingora** • Powered by **PostgreSQL**
 
-- **Authentication:** Secure JWT (Access + Refresh Tokens) with rotation and blacklist revocation.
-- **Security:** Argon2id password hashing, HTTP-only cookie support, and parameterized SQL queries.
-- **Performance:** Asynchronous Request handling, connection pooling, and optimized Docker builds.
-- **Robustness:** Structured logging (Tracing), Rate limiting, CORS, and Graceful shutdown.
-- **Dockerized:** Multi-stage builds, non-root user execution, and health checks.
+[Getting Started](#-getting-started) •
+[API Reference](#-api-reference) •
+[Documentation](#-documentation) •
+[Contributing](#-contributing)
+
+</div>
+
+---
+
+## 📖 Overview
+
+Civil Park API is a production-ready backend service designed for high throughput and security. It provides authentication, user management, and serves as the foundation for the Civil Park platform.
+
+### ✨ Key Features
+
+- **🚀 High Performance** — Async Rust achieving 100k+ req/s potential
+- **🛡️ Secure by Default** — Argon2 hashing, JWT rotation, rate limiting
+- **🦀 Modern Rust Stack** — Axum + Pingora + SQLx + Tokio
+- **🐳 Cloud Native** — Multi-stage Docker builds on Ubuntu 22.04 LTS
+- **📚 Self-Documenting** — Auto-generated OpenAPI/Swagger UI
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+graph LR
+    Client([👤 Client]) -->|HTTP :80| Proxy[🛡️ Pingora Proxy]
+    subgraph Docker Network
+        Proxy -->|:8080| API[⚙️ Axum API]
+        API -->|:5432| DB[(🐘 PostgreSQL)]
+    end
+    style Proxy fill:#f9f,stroke:#333,stroke-width:2px
+    style API fill:#bbf,stroke:#333,stroke-width:2px
+    style DB fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+| Service           | Port | Description                                 |
+| ----------------- | ---- | ------------------------------------------- |
+| **Pingora Proxy** | 80   | Edge gateway, load balancing, rate limiting |
+| **Axum API**      | 8080 | Core business logic, authentication         |
+| **PostgreSQL**    | 5432 | Primary data store                          |
+
+---
 
 ## 🛠️ Tech Stack
 
-- **Language:** Rust 1.92+
-- **Web Framework:** Axum 0.8
-- **Database:** PostgreSQL 18.1 (Alpine)
-- **ORM/Query Builder:** SQLx (Compile-time checked queries)
-- **Serialization:** Serde & Serde JSON
-- **Runtime:** Tokio
+| Category      | Technology                                              | Purpose                         |
+| ------------- | ------------------------------------------------------- | ------------------------------- |
+| **Framework** | [Axum 0.8](https://github.com/tokio-rs/axum)            | Ergonomic web framework         |
+| **Proxy**     | [Pingora 0.6](https://github.com/cloudflare/pingora)    | High-performance reverse proxy  |
+| **Database**  | [SQLx 0.8](https://github.com/launchbadge/sqlx)         | Async, compile-time checked SQL |
+| **Runtime**   | [Tokio 1.0](https://tokio.rs)                           | Async runtime                   |
+| **Auth**      | [jsonwebtoken](https://github.com/Keats/jsonwebtoken)   | JWT access/refresh tokens       |
+| **Hashing**   | [Argon2](https://github.com/RustCrypto/password-hashes) | Password hashing                |
+| **Docs**      | [Utoipa](https://github.com/juhaku/utoipa)              | OpenAPI generation              |
 
-## 🐳 Quick Start (Docker - Recommended)
+---
 
-1.  **Clone the repository:**
+## 📋 Prerequisites
 
-    ```bash
-    git clone https://github.com/yourusername/axum-api.git
-    cd axum-api
-    ```
+Before you begin, ensure you have:
 
-2.  **Configure Environment:**
+- **Docker Desktop** v24+ ([Download](https://www.docker.com/products/docker-desktop/))
+- **Git** ([Download](https://git-scm.com/downloads))
 
-    ```bash
-    cp .env.example .env
-    # Edit .env and set a strong JWT_SECRET and POSTGRES_PASSWORD
-    ```
+_For local development (optional):_
 
-3.  **Start Services:**
+- **Rust** v1.92+ ([Install](https://rustup.rs/))
+- **PostgreSQL** v16+ ([Download](https://www.postgresql.org/download/))
+- **SQLx CLI** (`cargo install sqlx-cli`)
 
-    ```bash
-    docker compose up -d --build
-    ```
+---
 
-4.  **Initialize Database:**
+## 🚀 Getting Started
 
-    ```bash
-    # Run migrations inside the container
-    cat migrations/*.sql | docker compose exec -T db psql -U postgres -d axum_db
-    ```
+### Quick Deploy (Docker)
 
-5.  **Verify:**
-    ```bash
-    curl http://localhost:8080/
-    # {"message":"Welcome to the Index API","status":"success"}
-    ```
+```bash
+# 1. Clone repository
+git clone https://github.com/civil-park-international/civil-park-api.git
+cd civil-park-api
 
-## Performance Benchmarking
+# 2. Configure environment
+cp .env.example .env
+# ⚠️ Edit .env and set secure values for JWT_SECRET and POSTGRES_PASSWORD
 
-To test the API performance under load, you can use **Apache Benchmark (ab)** via Docker (no installation required).
+# 3. Start all services
+docker compose up -d --build
 
-1. **Start the API:**
+# 4. Verify deployment
+docker compose ps
+curl http://localhost/health
+```
 
-   ```bash
-   docker compose up -d
-   ```
+### Local Development
 
-2. **Run Benchmark:**
-   (Test 500 requests with 20 concurrent users)
+```bash
+# 1. Start PostgreSQL (via Docker or local install)
+docker compose up -d db
 
-   ```bash
-   # Linux / macOS
-   docker run --rm --net=host httpd:alpine ab -n 500 -c 20 http://localhost:8080/
+# 2. Configure environment
+cp .env.example .env
+# Set DATABASE_URL=postgres://postgres:password@localhost:5432/axum_db
 
-   # Windows (Docker Desktop)
-   docker run --rm --net=host httpd:alpine ab -n 500 -c 20 http://host.docker.internal:8080/
-   ```
+# 3. Run migrations
+sqlx database create
+sqlx migrate run
 
-## 💻 Local Development
+# 4. Start development server
+cargo run
+```
 
-1.  **Prerequisites:** Rust, built-in Postgres running locally (or via Docker).
-2.  **Setup .env:** Ensure `DATABASE_URL` points to `localhost`.
-3.  **Run:**
+---
 
-    ```bash
-    # Install sqlx-cli
-    cargo install sqlx-cli
+## 🔧 Configuration
 
-    # Setup DB
-    sqlx database create
-    sqlx migrate run
+All configuration is done via environment variables. See `.env.example` for the complete list.
 
-    # Start Server
-    cargo run
-    ```
+### Required Variables
+
+| Variable            | Description                  | Example                             |
+| ------------------- | ---------------------------- | ----------------------------------- |
+| `DATABASE_URL`      | PostgreSQL connection string | `postgres://user:pass@host:5432/db` |
+| `JWT_SECRET`        | Secret key for token signing | `<32+ character random string>`     |
+| `POSTGRES_PASSWORD` | Database password            | `<strong random password>`          |
+
+### Optional Variables
+
+| Variable              | Default | Description                 |
+| --------------------- | ------- | --------------------------- |
+| `CORS_ORIGIN`         | `*`     | Allowed CORS origins        |
+| `RATE_LIMIT_REQUESTS` | `100`   | Max requests per window     |
+| `RATE_LIMIT_SECONDS`  | `60`    | Rate limit window (seconds) |
+| `LOG_LEVEL`           | `info`  | Logging verbosity           |
+
+### Generate Secure Secrets
+
+```bash
+# Linux/macOS
+openssl rand -base64 32
+
+# PowerShell
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
+
+---
+
+## 📚 API Reference
+
+### Authentication Endpoints
+
+| Method | Endpoint                | Description              | Auth |
+| ------ | ----------------------- | ------------------------ | :--: |
+| `POST` | `/api/v1/auth/register` | Register new user        |  ❌  |
+| `POST` | `/api/v1/auth/login`    | Login & get tokens       |  ❌  |
+| `POST` | `/api/v1/auth/refresh`  | Refresh access token     |  ❌  |
+| `POST` | `/api/v1/auth/logout`   | Logout (blacklist token) |  ✅  |
+
+### User Endpoints
+
+| Method | Endpoint               | Description      | Auth |
+| ------ | ---------------------- | ---------------- | :--: |
+| `GET`  | `/api/v1/user/profile` | Get current user |  ✅  |
+
+### System Endpoints
+
+| Method | Endpoint      | Description          | Auth |
+| ------ | ------------- | -------------------- | :--: |
+| `GET`  | `/health`     | Health check         |  ❌  |
+| `GET`  | `/swagger-ui` | Interactive API docs |  ❌  |
+
+---
 
 ## 📂 Project Structure
 
 ```
-src/
-├── main.rs         # Application entry point & Middleware setup
-├── config.rs       # Type-safe configuration from .env
-├── state.rs        # Shared application state (DbPool)
-├── routes/         # Route definitions (Auth, User, etc.)
-├── handlers/       # Request controllers & business logic
-├── models/         # Data structures & Database schemas
-└── utils/          # Helpers (Hashing, JWT, Validation)
+civil-park-api/
+├── 📂 src/                    # API source code
+│   ├── 📂 handlers/           # Request controllers
+│   ├── 📂 models/             # Data structures & DTOs
+│   ├── 📂 services/           # Business logic
+│   ├── 📂 repositories/       # Database access layer
+│   ├── 📂 utils/              # Helpers (JWT, hashing)
+│   ├── config.rs              # Configuration management
+│   ├── state.rs               # Application state
+│   └── main.rs                # Entry point
+├── 📂 pingora_proxy/          # Reverse proxy service
+│   ├── src/main.rs            # Proxy logic
+│   └── Dockerfile
+├── 📂 migrations/             # Database migrations
+├── 📂 docs/                   # Additional documentation
+├── 📜 Cargo.toml              # Rust dependencies
+├── 📜 Dockerfile              # API container build
+├── 📜 docker-compose.yml      # Service orchestration
+├── 📜 .env.example            # Environment template
+└── 📜 README.md               # This file
 ```
 
-## 🔌 API Endpoints
+---
 
-| Method | Endpoint                | Description                            | Auth Required |
-| :----- | :---------------------- | :------------------------------------- | :-----------: |
-| GET    | `/`                     | Health Check                           |      ❌       |
-| POST   | `/api/v1/auth/register` | Register new user                      |      ❌       |
-| POST   | `/api/v1/auth/login`    | Login (Returns Access + Refresh Token) |      ❌       |
-| POST   | `/api/v1/auth/refresh`  | Refresh Access Token                   |      ❌       |
-| POST   | `/api/v1/auth/logout`   | Logout (Blacklists token)              |      ✅       |
-| GET    | `/api/v1/user/profile`  | Get current user info                  |      ✅       |
+## 🧪 Testing
 
-## 🔒 Security Checklist for Production
+```bash
+# Run all tests
+cargo test
 
-Before deploying to a public server:
+# Run with output
+cargo test -- --nocapture
 
-- [ ] Change `JWT_SECRET` to a long, random string.
-- [ ] Change `POSTGRES_PASSWORD` to a strong password.
-- [ ] Set `CORS_ORIGIN` to your specific frontend domain (e.g., `https://example.com`).
-- [ ] Run behind a Reverse Proxy (Nginx/Traefik) with HTTPS enabled.
-- [ ] Ensure database port `5432` is NOT exposed to the public internet.
+# Run specific test
+cargo test test_name
+```
+
+### Performance Testing
+
+```bash
+# Using Apache Benchmark (via Docker)
+docker run --rm --net=host httpd:alpine ab -n 1000 -c 50 http://localhost/
+
+# Using oha (Rust-based)
+docker run --rm --net=host ghcr.io/hatoo/oha -n 1000 -c 50 http://localhost/
+```
+
+---
+
+## 🐳 Deployment
+
+### Production Checklist
+
+- [ ] Set strong `JWT_SECRET` (32+ characters)
+- [ ] Set strong `POSTGRES_PASSWORD`
+- [ ] Configure `CORS_ORIGIN` to your domain
+- [ ] Set appropriate `RATE_LIMIT_*` values
+- [ ] Enable HTTPS (via reverse proxy or load balancer)
+- [ ] Set up database backups
+
+### Docker Compose Commands
+
+```bash
+# Start all services
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# Stop all services
+docker compose down
+
+# Rebuild specific service
+docker compose up -d --build api
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+4. **Push** to the branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
+
+### Development Guidelines
+
+- Follow Rust formatting (`cargo fmt`)
+- Ensure all tests pass (`cargo test`)
+- Add tests for new features
+- Update documentation as needed
+
+---
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgements
+
+- [Axum](https://github.com/tokio-rs/axum) — Ergonomic web framework
+- [Pingora](https://github.com/cloudflare/pingora) — Cloudflare's proxy framework
+- [SQLx](https://github.com/launchbadge/sqlx) — Async SQL toolkit
+
+---
+
+<div align="center">
+
+**Built with ❤️ and 🦀 by the Civil Park Team**
+
+</div>
