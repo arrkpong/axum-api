@@ -77,14 +77,26 @@ pub async fn db_write(
     let unique_id = uuid::Uuid::new_v4().to_string();
     let email = format!("bm_{}@test.com", unique_id);
     let username = format!("bm_{}", unique_id);
+    let password = "benchmark_password_123";
+
+    // Simulate Django's workload: Hash password with Argon2 (CPU intensive)
+    // We use the same parameters as default Django (Argon2id) where possible,
+    // or reasonable defaults for production security.
+    let salt =
+        argon2::password_hash::SaltString::generate(&mut argon2::password_hash::rand_core::OsRng);
+    let argon2 = argon2::Argon2::default();
+    let password_hash = argon2::PasswordHasher::hash_password(&argon2, password.as_bytes(), &salt)
+        .map(|pool| pool.to_string())
+        .unwrap_or_else(|_| "hash_error".to_string());
 
     // Insert dummy user
     // Assuming created_at/updated_at have defaults or are handled by DB triggers
     let _ = sqlx::query(
-        "INSERT INTO auth_users (username, email, password_hash, role, is_active) VALUES ($1, $2, 'dummy_hash', 'user', true)"
+        "INSERT INTO auth_users (username, email, password_hash, role, is_active) VALUES ($1, $2, $3, 'user', true)"
     )
     .bind(username)
     .bind(email)
+    .bind(password_hash)
     .execute(&state.db_pool)
     .await;
 
@@ -93,7 +105,7 @@ pub async fn db_write(
     Json(json!(
         {
             "test": "db_write",
-            "description": "INSERT 1 row into auth_users",
+            "description": "INSERT 1 row into auth_users (with Argon2 Hashing)",
             "duration_ms": duration.as_millis()
         }
     ))
