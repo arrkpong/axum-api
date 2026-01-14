@@ -11,5 +11,6 @@ pub fn create_router() -> Router<AppState> {
         .route("/", get(general::index))
         .merge(auth::routes())
         .merge(user::routes())
-        .merge(benchmark::routes())
+    // Security: Disable benchmark routes in production
+    // .merge(benchmark::routes())
 }
