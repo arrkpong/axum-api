@@ -1,7 +1,8 @@
 [package]
-name = "civil-park-api"
+name = "axum-api"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/arrkpong/axum-api"
 
 # Optimize release builds
 [profile.release]
@@ -12,16 +13,16 @@ codegen-units = 1 # Slower build, but better optimization
 
 [dependencies]
 # Web framework
-axum = { version = "0.8.8", features = ["macros"] }
-tokio = { version = "1.49.0", features = ["full"] }
-tower = { version = "0.5.2", features = ["util", "limit", "timeout", "buffer"] }
-tower-http = { version = "0.6.8", features = [
+axum = { version = "0.8.9", features = ["macros"] }
+tokio = { version = "1.52.2", features = ["full"] }
+tower = { version = "0.5.3", features = ["util", "limit", "timeout", "buffer"] }
+tower-http = { version = "0.6.9", features = [
     "cors",
     "trace",
     "timeout",
     "compression-full",
 ] }
-utoipa = { version = "5.4.0", features = ["axum_extras", "uuid", "chrono"] }
+utoipa = { version = "5.5.0", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 
 # Serialization
@@ -38,24 +39,24 @@ sqlx = { version = "0.8.6", features = [
 ] }
 
 # Cache (Redis-compatible / Dragonfly)
-redis = { version = "1.0.2", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.2.1", features = ["tokio-comp", "connection-manager"] }
 
 # Authentication & Security
 argon2 = { version = "0.5.3" }
-jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 
 # Validation
 validator = { version = "0.20.0", features = ["derive"] }
 
 # Time
-chrono = { version = "0.4.42", features = ["serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
 
 # Utilities
-uuid = { version = "1.19.0", features = ["v4", "serde"] }
+uuid = { version = "1.23.1", features = ["v4", "serde"] }
 dotenvy = { version = "0.15.7" }
-thiserror = { version = "2.0.17" }
+thiserror = { version = "2.0.18" }
 
 # Logging
 tracing = { version = "0.1.44" }
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 async-trait = "0.1.89"

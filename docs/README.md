@@ -18,7 +18,7 @@
 | Utilities     | chrono, uuid, dotenvy |
 | Validation    | validator, thiserror  |
 | Logging       | tracing               |
-| API Docs      | utoipa                |
+| API Docs      | Optional utoipa notes |
 
 ---
 

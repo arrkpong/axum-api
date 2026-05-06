@@ -89,16 +89,13 @@ pub async fn db_write(
         .map(|pool| pool.to_string())
         .unwrap_or_else(|_| "hash_error".to_string());
 
-    // Insert dummy user
-    // Assuming created_at/updated_at have defaults or are handled by DB triggers
-    let _ = sqlx::query(
-        "INSERT INTO auth_users (username, email, password_hash, role, is_active) VALUES ($1, $2, $3, 'user', true)"
-    )
-    .bind(username)
-    .bind(email)
-    .bind(password_hash)
-    .execute(&state.db_pool)
-    .await;
+    // Insert dummy user using the same auth_users schema as the migrations.
+    let _ = sqlx::query("INSERT INTO auth_users (username, email, password) VALUES ($1, $2, $3)")
+        .bind(username)
+        .bind(email)
+        .bind(password_hash)
+        .execute(&state.db_pool)
+        .await;
 
     let duration = start.elapsed();
 

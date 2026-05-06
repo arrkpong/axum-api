@@ -24,17 +24,21 @@ pub async fn login(
     info!("Login endpoint hit");
 
     // Query user from database
-    let select_user = sqlx::query!(
+    let select_user = sqlx::query(
         "SELECT id, username, password FROM auth_users WHERE username = $1",
-        &payload.username,
     )
+    .bind(&payload.username)
     .fetch_optional(&state.db_pool)
     .await;
 
     match select_user {
         Ok(Some(user)) => {
+            let user_id: i32 = user.get("id");
+            let username: String = user.get("username");
+            let password: String = user.get("password");
+
             // Verify password using helper
-            if match verify_password(payload.password.clone(), user.password.clone()).await {
+            if match verify_password(payload.password.clone(), password).await {
                 Ok(valid) => valid,
                 Err((status, msg)) => {
                     return (
@@ -46,8 +50,8 @@ pub async fn login(
             } {
                 // Generate access token using helper
                 let (access_token, _claims) = match generate_access_token(
-                    &user.username,
-                    user.id,
+                    &username,
+                    user_id,
                     &state.config.jwt_secret,
                     state.config.access_token_expiry_minutes,
                 ) {
@@ -59,7 +63,7 @@ pub async fn login(
 
                 // Generate refresh token using helper
                 let refresh_token = match create_refresh_token(
-                    user.id,
+                    user_id,
                     &state.db_pool,
                     state.config.refresh_token_expiry_days,
                 )
@@ -75,7 +79,7 @@ pub async fn login(
                     }
                 };
 
-                info!(user_id = user.id, "Login successful");
+                info!(user_id = user_id, "Login successful");
                 (
                     StatusCode::OK,
                     Json(serde_json::json!({
@@ -84,7 +88,7 @@ pub async fn login(
                         "access_token": access_token,
                         "refresh_token": refresh_token,
                         "expires_in": 900,
-                        "user_id": user.id
+                        "user_id": user_id
                     })),
                 )
                     .into_response()
@@ -108,7 +112,7 @@ pub async fn login(
         }
 
         Err(e) => {
-            error!(%e, "Database query failed during login");
+            error!(error = %e, username = %payload.username, "Database query failed during login");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": "Failed to fetch user"})),

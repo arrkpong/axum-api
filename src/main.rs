@@ -13,11 +13,7 @@ use tower::ServiceBuilder;
 use tower::buffer::BufferLayer;
 use tower::limit::RateLimitLayer;
 use tower::timeout::TimeoutLayer;
-use tower_http::{
-    compression::CompressionLayer,
-    cors::{Any, CorsLayer},
-    trace::TraceLayer,
-};
+use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -28,7 +24,10 @@ use state::AppState;
 /// - "*" = permissive (allow all origins)
 /// - specific URL = allow only that origin
 fn build_cors_layer(cors_origin: &str) -> CorsLayer {
-    use axum::http::Method;
+    use axum::http::{
+        Method,
+        header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, ORIGIN},
+    };
 
     if cors_origin == "*" {
         CorsLayer::permissive()
@@ -46,7 +45,7 @@ fn build_cors_layer(cors_origin: &str) -> CorsLayer {
                 Method::DELETE,
                 Method::OPTIONS,
             ])
-            .allow_headers(Any)
+            .allow_headers([ACCEPT, AUTHORIZATION, CONTENT_TYPE, ORIGIN])
             .allow_credentials(true)
     }
 }
@@ -112,28 +111,30 @@ async fn main() {
     };
 
     // Configure routes and middleware
-    let app = routes::create_router().with_state(app_state).layer(
-        ServiceBuilder::new()
-            // 1. Trace: Log every request/response (even if blocked by rate limit)
-            .layer(TraceLayer::new_for_http())
-            // 2. Compression: Compress response body (Gzip/Brotli)
-            .layer(CompressionLayer::new())
-            // 3. CORS: Allow cross-origin requests from frontend
-            .layer(build_cors_layer(&config.cors_origin))
-            // 4. HandleError: Catch errors from inner layers (RateLimit/Timeout) and convert to JSON
-            .layer(HandleErrorLayer::new(handle_middleware_error))
-            // 5. Buffer: Required for RateLimit (handles queuing/cloning of services)
-            .layer(BufferLayer::new(1024))
-            // 6. RateLimit: Limit requests per user/IP
-            .layer(RateLimitLayer::new(
-                config.rate_limit_requests,
-                Duration::from_secs(config.rate_limit_seconds),
-            ))
-            // 7. Timeout: Abort request if processing takes too long
-            .layer(TimeoutLayer::new(Duration::from_secs(
-                config.request_timeout_seconds,
-            ))),
-    );
+    let app = routes::create_router(config.enable_benchmark_routes)
+        .with_state(app_state)
+        .layer(
+            ServiceBuilder::new()
+                // 1. Trace: Log every request/response (even if blocked by rate limit)
+                .layer(TraceLayer::new_for_http())
+                // 2. Compression: Compress response body (Gzip/Brotli)
+                .layer(CompressionLayer::new())
+                // 3. CORS: Allow cross-origin requests from frontend
+                .layer(build_cors_layer(&config.cors_origin))
+                // 4. HandleError: Catch errors from inner layers (RateLimit/Timeout) and convert to JSON
+                .layer(HandleErrorLayer::new(handle_middleware_error))
+                // 5. Buffer: Required for RateLimit (handles queuing/cloning of services)
+                .layer(BufferLayer::new(1024))
+                // 6. RateLimit: Limit requests per user/IP
+                .layer(RateLimitLayer::new(
+                    config.rate_limit_requests,
+                    Duration::from_secs(config.rate_limit_seconds),
+                ))
+                // 7. Timeout: Abort request if processing takes too long
+                .layer(TimeoutLayer::new(Duration::from_secs(
+                    config.request_timeout_seconds,
+                ))),
+        );
 
     // Bind to host and port from environment or defaults
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());

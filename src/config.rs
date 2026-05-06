@@ -23,6 +23,8 @@ pub struct Config {
     pub redis_url: String,
     /// Cache TTL in seconds
     pub cache_ttl_seconds: u64,
+    /// Whether benchmark routes should be mounted
+    pub enable_benchmark_routes: bool,
 }
 
 impl Config {
@@ -61,6 +63,10 @@ impl Config {
                 .unwrap_or_else(|_| "300".to_string())
                 .parse()
                 .expect("CACHE_TTL_SECONDS must be a number"),
+            enable_benchmark_routes: env::var("ENABLE_BENCHMARK_ROUTES")
+                .unwrap_or_else(|_| "false".to_string())
+                .parse()
+                .expect("ENABLE_BENCHMARK_ROUTES must be true or false"),
         }
     }
 }
