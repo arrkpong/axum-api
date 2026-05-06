@@ -1,7 +1,7 @@
 services:
   db:
     # PostgreSQL database for local/prod-like runs.
-    image: postgres:18.1-alpine
+    image: postgres:18.3-alpine3.23
     environment:
       # Load credentials from environment (set in .env or CI/CD secrets).
       POSTGRES_USER: ${POSTGRES_USER:-postgres}

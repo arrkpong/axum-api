@@ -1,5 +1,5 @@
 # Build Stage
-FROM rust:1.92.0-bookworm AS builder
+FROM rust:1.95.0-bookworm AS builder
 
 WORKDIR /usr/src/app
 COPY . .
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
 RUN cargo build --release
 
 # Runtime Stage
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Install OpenSSL/CA certificates (Pingora needs them for upstream TLS if used)
 RUN apt-get update && apt-get install -y ca-certificates libssl-dev && rm -rf /var/lib/apt/lists/*

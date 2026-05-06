@@ -1,5 +1,5 @@
 # Build stage: compile the Rust binary with all dependencies.
-FROM rust:1.92.0-slim-bookworm AS builder
+FROM rust:1.95.0-slim-bookworm AS builder
 
 WORKDIR /app
 
@@ -34,7 +34,7 @@ RUN touch src/main.rs
 RUN cargo build --release --locked
 
 # Runtime stage: Ubuntu LTS with compiled binary.
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 
 WORKDIR /app
 
